@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#1d4d2c" />
+    <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="GreenGlow" />
+    <title>GreenGlow Connect help</title>
+  </head>
+  <body class="help">
+    <header class="app-bar">
+      <div class="bar-inner">
+        <a class="bar-brand" href="/" title="Back to the terminal">
+          <img class="bar-brand-mark" src="/icons/icon-192.png" alt="" width="32" height="32" />
+          <h1 class="bar-brand-name">GreenGlow Connect</h1>
+        </a>
+        <span class="help-bar-title">Help</span>
+        <nav class="help-guides" aria-label="Guides" hidden>
+          <a href="#" data-guide="user">User guide</a>
+          <a href="#admin" data-guide="admin">Administrator guide</a>
+        </nav>
+        <a class="bar-btn help-back" href="/">Back to the terminal</a>
+      </div>
+    </header>
+
+    <div class="help-layout">
+      <nav class="help-toc" aria-label="Contents"></nav>
+
+      <main class="help-main">
+        <article id="guide-user" class="help-guide">
+          <h1>GreenGlow Connect user guide</h1>
+          <p class="help-lead">
+            GreenGlow shows the same IBM i screens you use in IBM i Access Client Solutions (ACS),
+            in your browser. The programs on the IBM i don't change: you sign on, type and press the
+            same keys. GreenGlow adds tabs, copy and paste, sharing and macros, and can give the
+            screens a cleaner look.
+          </p>
+
+          <section id="connect">
+            <h2>Signing in and connecting</h2>
+            <ol>
+              <li>
+                Open GreenGlow in Edge or Chrome. The first time, sign in with your work Microsoft
+                account.
+              </li>
+              <li>
+                The <strong>Disconnected</strong> card shows the IBM i systems you may use. With
+                several, each is a tile: click one, or move between them with the arrow keys and
+                press <kbd>Enter</kbd>. The system you used last has the focus. With one system,
+                press <strong>Connect to</strong> it.
+              </li>
+              <li>
+                The IBM i sign-on screen appears. Sign on with your IBM i user and password, as in
+                ACS.
+              </li>
+            </ol>
+            <figure>
+              <img src="/help/lobby.png" alt="The Disconnected card with a tile for each system" />
+              <figcaption>Choosing a system on the Disconnected card.</figcaption>
+            </figure>
+            <p>Each system shows a lock that says how the connection to it is protected:</p>
+            <ul>
+              <li>
+                <span class="help-lock help-lock-ok">Green</span>: TLS, and the IBM i's certificate
+                is checked.
+              </li>
+              <li>
+                <span class="help-lock help-lock-warn">Yellow</span>: encrypted, but the certificate
+                isn't checked.
+              </li>
+              <li>
+                <span class="help-lock help-lock-bad">Red</span>: plain Telnet, not encrypted. Only
+                test systems are set up this way.
+              </li>
+            </ul>
+            <p>
+              If no system is listed, ask an administrator to give you access. Your IBM i password
+              is typed into the IBM i screen and never kept by GreenGlow; no one you share a session
+              with ever sees it.
+            </p>
+          </section>
+
+          <section id="screen">
+            <h2>The screen and the top bar</h2>
+            <figure>
+              <img src="/help/signon.png" alt="GreenGlow showing the IBM i sign-on screen" />
+              <figcaption>A session on the sign-on screen, in the Classic look.</figcaption>
+            </figure>
+            <p>From left to right, the top bar holds:</p>
+            <ul>
+              <li>
+                <strong>Tabs</strong>, one for each session, named after the screen's title and
+                coloured for its system. See <a href="#tabs">Several sessions</a>.
+              </li>
+              <li>
+                <strong>Who has the keyboard</strong>, when someone else is in the session with you.
+                See <a href="#sharing">Sharing a session</a>.
+              </li>
+              <li><strong>The status</strong>: what the session is doing, with a coloured dot.</li>
+              <li>
+                <strong>Full screen</strong>. In full screen, keys such as <kbd>Ctrl</kbd>+<kbd
+                  >W</kbd
+                >
+                and <kbd>F11</kbd> go to the IBM i instead of the browser.
+              </li>
+              <li><strong>The menu</strong> (☰).</li>
+            </ul>
+            <figure class="help-narrow">
+              <img src="/help/menu.png" alt="The menu, open" />
+              <figcaption>The menu.</figcaption>
+            </figure>
+            <p>The menu holds:</p>
+            <ul>
+              <li>
+                <strong>Look</strong>: Classic, GreenGlow or Night Shift. See
+                <a href="#looks">Looks and colours</a>.
+              </li>
+              <li><strong>Customize colours…</strong></li>
+              <li>
+                <strong>Rule line</strong>: Off, Crosshair, Row or Column. A red line through the
+                cursor, as in ACS.
+              </li>
+              <li>
+                <strong>Screen size</strong>: Scale, Stretch or Fixed. Scale makes the screen as big
+                as the window allows while keeping its shape. Stretch fills the window, widening or
+                narrowing the characters to do it. Fixed keeps the <strong>Font size</strong> you
+                choose under it; if the screen is then bigger than the window, scroll to see the
+                rest. With Scale or Stretch, the screen resizes to fit beside an open side panel.
+              </li>
+              <li>
+                <strong>Colour for</strong> the system: your own colour for its tab, or
+                <strong>Use the system's colour</strong>.
+              </li>
+              <li>
+                <strong>Share this session…</strong> and <strong>Disconnect</strong>, while
+                connected.
+              </li>
+              <li><strong>Show sharing panel</strong> and <strong>Show keys panel</strong>.</li>
+              <li><strong>Administration</strong>, for administrators.</li>
+              <li><strong>Full screen</strong> and <strong>Show session log</strong>.</li>
+              <li><strong>Help</strong>: this guide.</li>
+              <li><strong>Sign out</strong>.</li>
+            </ul>
+            <p>The line under the screen is the 5250 status line:</p>
+            <ul>
+              <li>
+                <code>X SYSTEM</code>: the IBM i is working; keys you type now wait their turn
+                (type-ahead).
+              </li>
+              <li>
+                <code>X II</code> and a number: a keyboard error, with its message on the bottom
+                line. Press <kbd>Left Ctrl</kbd> (Reset) to clear it.
+              </li>
+              <li>
+                <code>INS</code>: insert mode. <code>Type-ahead</code>: keys waiting to be sent.
+              </li>
+              <li>The cursor's row and column.</li>
+            </ul>
+          </section>
+
+          <section id="keyboard">
+            <h2>The keyboard</h2>
+            <p>The keys are the same as in ACS:</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Press</th>
+                  <th>For</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><kbd>Enter</kbd></td>
+                  <td>Enter</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td>
+                  <td>Field Exit</td>
+                </tr>
+                <tr>
+                  <td><kbd>Shift</kbd>+<kbd>Enter</kbd>, or <kbd>Right Ctrl</kbd> alone</td>
+                  <td>New Line</td>
+                </tr>
+                <tr>
+                  <td><kbd>Left Ctrl</kbd> alone</td>
+                  <td>Reset</td>
+                </tr>
+                <tr>
+                  <td><kbd>F1</kbd> to <kbd>F12</kbd></td>
+                  <td>F1 to F12</td>
+                </tr>
+                <tr>
+                  <td><kbd>Shift</kbd>+<kbd>F1</kbd> to <kbd>Shift</kbd>+<kbd>F12</kbd></td>
+                  <td>F13 to F24</td>
+                </tr>
+                <tr>
+                  <td><kbd>Page Down</kbd> / <kbd>Page Up</kbd></td>
+                  <td>Roll Up / Roll Down: the next or previous page of a list</td>
+                </tr>
+                <tr>
+                  <td><kbd>Tab</kbd> / <kbd>Shift</kbd>+<kbd>Tab</kbd></td>
+                  <td>Next field / previous field</td>
+                </tr>
+                <tr>
+                  <td>Keypad <kbd>+</kbd> / <kbd>−</kbd></td>
+                  <td>Field+ / Field−</td>
+                </tr>
+                <tr>
+                  <td><kbd>Esc</kbd></td>
+                  <td>Attention</td>
+                </tr>
+                <tr>
+                  <td><kbd>Shift</kbd>+<kbd>Esc</kbd></td>
+                  <td>System Request</td>
+                </tr>
+                <tr>
+                  <td><kbd>Shift</kbd>+<kbd>Insert</kbd></td>
+                  <td>Dup</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd>+<kbd>End</kbd></td>
+                  <td>Erase EOF: clears the field from the cursor</td>
+                </tr>
+                <tr>
+                  <td><kbd>Alt</kbd>+<kbd>End</kbd></td>
+                  <td>Erase Input: clears every input field</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Insert</kbd>, <kbd>Delete</kbd>, <kbd>Home</kbd>, <kbd>End</kbd>,
+                    <kbd>Backspace</kbd>, arrows
+                  </td>
+                  <td>The same keys</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              Help, Print and Clear have no key: press them on the <a href="#panels">Keys panel</a>.
+              You can keep typing while the IBM i is busy; your keys are sent in order when it is
+              ready.
+            </p>
+            <p>GreenGlow's own shortcuts use <kbd>Alt</kbd>:</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Press</th>
+                  <th>For</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>Alt</kbd>+<kbd>9</kbd>, <kbd>Alt</kbd>+<kbd
+                      >0</kbd
+                    >
+                  </td>
+                  <td>Go to tab 1 to 10</td>
+                </tr>
+                <tr>
+                  <td><kbd>Alt</kbd>+<kbd>N</kbd></td>
+                  <td>A new session in a new tab</td>
+                </tr>
+                <tr>
+                  <td><kbd>Alt</kbd>+<kbd>J</kbd></td>
+                  <td>Join the session just shared with you</td>
+                </tr>
+                <tr>
+                  <td>
+                    <kbd>Alt</kbd>+<kbd>K</kbd>, <kbd>Alt</kbd>+<kbd>S</kbd>,
+                    <kbd>Alt</kbd>+<kbd>M</kbd>, <kbd>Alt</kbd>+<kbd>P</kbd>
+                  </td>
+                  <td>The Keys, Share, Macros and Printer output panels</td>
+                </tr>
+                <tr>
+                  <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td>
+                  <td>Copy table (the page showing)</td>
+                </tr>
+                <tr>
+                  <td><kbd>Alt</kbd>+<kbd>C</kbd></td>
+                  <td>Copy entire table (every page)</td>
+                </tr>
+                <tr>
+                  <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+ a letter or digit</td>
+                  <td>Play the macro you gave those keys</td>
+                </tr>
+                <tr>
+                  <td><kbd>Ctrl</kbd>+<kbd>C</kbd> / <kbd>Ctrl</kbd>+<kbd>V</kbd></td>
+                  <td>Copy the selection / paste</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section id="mouse">
+            <h2>The mouse, copy and paste</h2>
+            <ul>
+              <li><strong>Click</strong> a position to move the cursor there.</li>
+              <li>
+                <strong>Drag</strong> to select a block of the screen. <kbd>Shift</kbd>+click
+                extends it.
+              </li>
+              <li>
+                <strong>Turn the mouse wheel</strong> to page through a list (Page Down and Page
+                Up). On a touch screen, swipe up or down.
+              </li>
+              <li>
+                <strong>Click a function key legend</strong> such as <code>F3=Exit</code> to press
+                that key.
+              </li>
+              <li>
+                <strong>Right-click</strong> for Copy, Paste, Select all and, on a list, the table
+                copies.
+              </li>
+            </ul>
+            <figure>
+              <img src="/help/context.png" alt="A selected block and the right-click menu" />
+              <figcaption>A selection and the right-click menu.</figcaption>
+            </figure>
+            <h3>Copy</h3>
+            <p>
+              <kbd>Ctrl</kbd>+<kbd>C</kbd> copies the selected block as it shows, without trailing
+              blanks. Password fields copy as blanks.
+            </p>
+            <h3>Paste</h3>
+            <p>
+              <kbd>Ctrl</kbd>+<kbd>V</kbd> types the text from the cursor as if you typed it. Each
+              new line goes to the same column one row down, and a tab moves to the next field.
+              Paste never presses Enter, so check the screen and press Enter yourself. If the IBM i
+              refuses a character, pasting stops there and the status says why.
+            </p>
+            <h3>Copy a table</h3>
+            <p>On a screen with a list:</p>
+            <ul>
+              <li>
+                <strong>Copy table</strong> (<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>) copies
+                the page showing.
+              </li>
+              <li>
+                <strong>Copy entire table</strong> (<kbd>Alt</kbd>+<kbd>C</kbd>) presses Page Down
+                for you until the last page (up to 200 pages) and copies every row.
+                <kbd>Esc</kbd> stops it.
+              </li>
+            </ul>
+            <p>
+              The rows are copied with tabs between columns, so they paste into Excel as columns.
+              The option column is left out.
+            </p>
+          </section>
+
+          <section id="tabs">
+            <h2>Several sessions</h2>
+            <p>
+              Each tab is its own IBM i session, up to 10. <strong>+</strong> or <kbd>Alt</kbd>+<kbd
+                >N</kbd
+              >
+              opens another; <kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>Alt</kbd>+<kbd>0</kbd> switch
+              between them. A tab's name is the title of its screen. Close a tab with its
+              <strong>×</strong>, a middle-click, or <kbd>Delete</kbd>
+              while the tabs have the focus. How many sessions you may have on a system is set by
+              your administrator; the IBM i itself allows three per user, ACS included.
+            </p>
+            <h3>Sessions wait for you</h3>
+            <p>
+              Closing the browser, or losing the network, doesn't end your sessions. GreenGlow keeps
+              them open for a few minutes, so a reload or a new window comes back to the same IBM i
+              jobs, each in its tab. When you open GreenGlow it rejoins your sessions that no other
+              window is showing.
+            </p>
+            <figure>
+              <img src="/help/sessions.png" alt="The Disconnected card listing open sessions" />
+              <figcaption>Your open sessions, on the Disconnected card.</figcaption>
+            </figure>
+            <p>
+              When a tab has no session, the Disconnected card lists your open sessions: when each
+              was opened, the system, the IBM i user, the screen and how many browsers show it.
+            </p>
+            <ul>
+              <li><strong>Join</strong> shows the session in this tab.</li>
+              <li>
+                <strong>Take over</strong> brings your session here when it is open in as many
+                browsers as allowed; the other browser lets it go.
+              </li>
+              <li><strong>End</strong> ends the session on the server.</li>
+              <li>Tick several and press <strong>Join selected</strong> to open each in a tab.</li>
+            </ul>
+          </section>
+
+          <section id="disconnect">
+            <h2>Disconnecting and signing off</h2>
+            <p>
+              The cleanest way to finish is to <strong>sign off</strong> the IBM i (for example
+              <code>SIGNOFF</code>, or the sign-off option on your menu). GreenGlow then closes the
+              tab by itself.
+            </p>
+            <p>
+              <strong>Disconnect</strong> in the menu, or closing a tab, while you're still signed
+              on asks what to do:
+            </p>
+            <figure>
+              <img
+                src="/help/disconnect.png"
+                alt="The question asked when disconnecting a signed-on session"
+              />
+              <figcaption>Disconnecting while signed on.</figcaption>
+            </figure>
+            <ul>
+              <li><strong>Stay connected</strong> (or <kbd>Esc</kbd>): changes nothing.</li>
+              <li>
+                <strong>End session</strong>: drops your IBM i job. The program you're in may end
+                with an error, so sign off first when you can.
+              </li>
+              <li>
+                <strong>Leave it running</strong>: the session waits on the server for a few minutes
+                for you to join it again.
+              </li>
+            </ul>
+            <h3>When a session ends by itself</h3>
+            <p>A message says why. The most common:</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Message</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Session ended</td>
+                  <td>The IBM i ended the session, usually because you signed off.</td>
+                </tr>
+                <tr>
+                  <td>Connection to the IBM i lost</td>
+                  <td>The IBM i or the network dropped the connection. Connect again.</td>
+                </tr>
+                <tr>
+                  <td>Connection to GreenGlow lost</td>
+                  <td>
+                    Your browser lost GreenGlow. If the session is still open, join it from the
+                    list.
+                  </td>
+                </tr>
+                <tr>
+                  <td>GreenGlow restarted</td>
+                  <td>The GreenGlow server restarted.</td>
+                </tr>
+                <tr>
+                  <td>Ended elsewhere</td>
+                  <td>You ended it from another tab or browser.</td>
+                </tr>
+                <tr>
+                  <td>Opened elsewhere</td>
+                  <td>Another of your browsers took the session over.</td>
+                </tr>
+                <tr>
+                  <td>Owner left, Sharing stopped</td>
+                  <td>In a session shared with you: the owner disconnected or stopped sharing.</td>
+                </tr>
+                <tr>
+                  <td>Connection too slow</td>
+                  <td>Your browser fell behind. The session is still open: join it again.</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              If a session ended while a program was running, signing on again on the same device
+              offers to reconnect the job. The program may have ended, and may take more than one
+              try to start again.
+            </p>
+          </section>
+
+          <section id="panels">
+            <h2>Side panels</h2>
+            <p>
+              Four panels pull out from tabs on the right edge of the window, one at a time:
+              <strong>Keys</strong> (<kbd>Alt</kbd>+<kbd>K</kbd>),
+              <strong>Share</strong> (<kbd>Alt</kbd>+<kbd>S</kbd>),
+              <strong>Macros</strong> (<kbd>Alt</kbd>+<kbd>M</kbd>) and
+              <strong>Printer</strong> (<kbd>Alt</kbd>+<kbd>P</kbd>, see
+              <a href="#printer">Printer output</a>). The screen makes room for the panel. Press the
+              same keys again, or ×, to close it.
+            </p>
+            <figure class="help-narrow">
+              <img src="/help/keys.png" alt="The Keys panel" />
+              <figcaption>The Keys panel, with Other keys open.</figcaption>
+            </figure>
+            <p>
+              The <strong>Keys</strong> panel has F1 to F24, Field Exit, Erase Input, Page Up, Page
+              Down and Enter. <strong>Other keys</strong> adds the rest: Help, Print, Clear,
+              Attention, System Request, Dup, Erase EOF, Reset and more. Each button sends that one
+              key, and the cursor stays on the screen.
+            </p>
+          </section>
+
+          <section id="sharing">
+            <h2>Sharing a session</h2>
+            <p>
+              You can let a colleague or the Helpdesk see your session, or work in it, without
+              giving them your password.
+            </p>
+            <ol>
+              <li>
+                Choose <strong>Share this session…</strong> in the menu, or <strong>+</strong> on
+                the Share panel.
+              </li>
+              <li>Under <strong>Add a person</strong>, type a name and pick them.</li>
+              <li>
+                Choose their access: <strong>View-Only</strong> watches;
+                <strong>Full Access</strong>
+                can take the keyboard and works as you, under your IBM i user. Give Full Access only
+                to someone you would let use your keyboard.
+              </li>
+              <li>
+                Press <strong>Create link</strong>, then <strong>Copy link</strong> and send it to
+                them. Only the people you named can use it.
+              </li>
+            </ol>
+            <figure>
+              <img src="/help/share.png" alt="The share dialog" />
+              <figcaption>Sharing a session.</figcaption>
+            </figure>
+            <p>
+              Someone with GreenGlow open sees a card in the corner when you share with them, and
+              can join with <kbd>Alt</kbd>+<kbd>J</kbd>. Sessions shared with them are also listed
+              on their Disconnected card and Share panel.
+            </p>
+            <figure class="help-narrow">
+              <img src="/help/sharing-panel.png" alt="The Share panel" />
+              <figcaption>The Share panel.</figcaption>
+            </figure>
+            <p>The Share panel shows:</p>
+            <ul>
+              <li>
+                <strong>Who has the keyboard.</strong> Only one person types at a time. Someone with
+                Full Access presses <strong>Take control</strong> to type, and
+                <strong>Return control</strong> to give it back.
+              </li>
+              <li>
+                <strong>Shared with</strong>: each person, with a light (green: watching now;
+                yellow: in GreenGlow but not watching; hollow: not in GreenGlow). Click the keyboard
+                to switch between View-Only and Full Access; × stops sharing with them. Changes take
+                effect at once.
+              </li>
+              <li>
+                <strong>Sessions shared with you</strong>, to join, leave or take off your list.
+              </li>
+            </ul>
+            <p>
+              People you share with can see the session only while you're in it: when you
+              disconnect, they are sent away until you come back. Passwords never show, for anyone.
+            </p>
+          </section>
+
+          <section id="macros">
+            <h2>Macros</h2>
+            <p>
+              A macro replays keys and field entries you recorded, screen by screen. Macros are kept
+              on the server, so they follow you to any browser.
+            </p>
+            <figure class="help-narrow">
+              <img src="/help/macros.png" alt="The Macros panel" />
+              <figcaption>The Macros panel.</figcaption>
+            </figure>
+            <h3>Record</h3>
+            <ol>
+              <li>Go to the screen the macro should start on.</li>
+              <li>
+                On the Macros panel press <strong>●</strong>, name the macro and press
+                <strong>Record</strong>.
+              </li>
+              <li>Work as usual. The Macros tab shows a red dot while recording.</li>
+              <li>Press <strong>Stop</strong> to save it, or <strong>Cancel</strong>.</li>
+            </ol>
+            <p>
+              What you type into a password field is never recorded: the macro asks for it when it
+              plays.
+            </p>
+            <h3>Play</h3>
+            <p>
+              Press <strong>▶</strong>, or the keys you gave it. It must start on the screen it was
+              recorded on, and stops if a screen isn't what it expects. <kbd>Esc</kbd> stops it.
+            </p>
+            <h3>Keys, ACS macros and sharing</h3>
+            <ul>
+              <li>
+                <strong>⌨</strong> gives a macro a key combination: <kbd>Alt</kbd>+<kbd>Shift</kbd>
+                and a letter or digit.
+              </li>
+              <li>
+                <strong>⇩</strong> imports a macro saved by ACS (<code>.mac</code>);
+                <strong>⇧</strong> exports one for ACS. A macro that holds a typed password can't be
+                imported: make it a prompt in ACS first.
+              </li>
+              <li>
+                <strong>⇪</strong> shares a macro with people or groups you're in. They can play it;
+                only you can change it.
+              </li>
+              <li><strong>✎</strong> renames and <strong>×</strong> deletes your own macros.</li>
+            </ul>
+          </section>
+
+          <section id="printer">
+            <h2>Printer output</h2>
+            <p>
+              Your spooled files (what your programs printed) on the system of the tab showing, to
+              read, save or print as PDFs, as Printer Output does in ACS.
+            </p>
+            <ol>
+              <li>
+                Press <kbd>Alt</kbd>+<kbd>P</kbd>, or the <strong>Printer</strong> tab on the right
+                edge.
+              </li>
+              <li>
+                The first time, sign on with your IBM i user and password. The user is filled in
+                from your session on that system. A wrong password counts toward disabling your
+                profile, as at the sign-on screen. GreenGlow doesn't keep the password: after 15
+                minutes unused, or <strong>Sign off</strong>, it asks again.
+              </li>
+              <li>
+                Your spooled files are listed, newest first, with their pages, job and output queue.
+                Move with the arrow keys and press <kbd>Enter</kbd>, or click one: it opens as a PDF
+                in a new browser tab. Print it from there (<kbd>Ctrl</kbd>+<kbd>P</kbd>) or save it.
+              </li>
+              <li><strong>Refresh</strong> lists them again.</li>
+            </ol>
+            <figure class="help-narrow">
+              <img src="/help/printer.png" alt="The Printer output panel listing spooled files" />
+              <figcaption>Your spooled files in the Printer output panel.</figcaption>
+            </figure>
+            <p>
+              The panel shows the system of the tab you're on. Another tab on the same system,
+              signed on as the same IBM i user, shows the same list without signing on again; a tab
+              on another system, or signed on as another user, asks you to sign on there. Only your
+              own spooled files are listed. Reports print as text pages; files made for AFP printers
+              (shown with their type, such as <code>*AFPDS</code>) can't be shown here: open those
+              in ACS.
+            </p>
+          </section>
+
+          <section id="looks">
+            <h2>Looks and colours</h2>
+            <p>Choose a look in the menu. Each browser remembers its own choice.</p>
+            <ul>
+              <li><strong>Classic</strong> looks like ACS. Nothing is added.</li>
+              <li>
+                <strong>GreenGlow</strong> keeps every screen as it is but draws it more clearly:
+                input fields as boxes, function keys as buttons you can click, lists as tables with
+                a <strong>More…</strong> button, windows as dialogs, and messages as banners. The
+                status line says what the field at the cursor takes, for example
+                <em>Numbers only · 10 positions · Required</em>.
+              </li>
+              <li><strong>Night Shift</strong> is the GreenGlow look on a dark background.</li>
+            </ul>
+            <figure>
+              <img src="/help/greenglow.png" alt="A list in the GreenGlow look" />
+              <figcaption>A list in the GreenGlow look.</figcaption>
+            </figure>
+            <p>
+              <strong>Customize colours…</strong> changes the colours of the look you're using, in
+              this browser. <strong>Save to a file</strong> keeps them, to load in another browser
+              or give to a colleague with <strong>Load from a file…</strong>.
+              <strong>Use the look's colours</strong> goes back.
+            </p>
+            <figure class="help-narrow">
+              <img src="/help/colours.png" alt="The Customize colours dialog" />
+              <figcaption>Customizing the colours.</figcaption>
+            </figure>
+          </section>
+
+          <section id="app">
+            <h2>Install it as an app</h2>
+            <p>
+              In Edge or Chrome, press the install icon at the right of the address bar (or find
+              Install in the browser's menu, under Apps). GreenGlow then opens in its own window
+              from the Start menu or taskbar, like ACS. It still needs the network.
+            </p>
+          </section>
+
+          <section id="trouble">
+            <h2>When something goes wrong</h2>
+            <ul>
+              <li>
+                <strong>"Device in use"</strong>: an earlier session still holds your device name.
+                <strong>Try again</strong> once the IBM i drops it, or
+                <strong>Use a spare name</strong>
+                now.
+              </li>
+              <li>
+                <strong>Keyboard locked (<code>X II</code>)</strong>: read the message on the bottom
+                line, then press <kbd>Left Ctrl</kbd> (Reset).
+              </li>
+              <li>
+                <strong>Session log</strong> (in the menu) lists what happened to the connection.
+                Include it when you report a problem.
+              </li>
+              <li>
+                <strong>The Classic look</strong> shows the screen exactly as ACS does, if another
+                look ever gets in the way.
+              </li>
+            </ul>
+          </section>
+        </article>
+
+        <article id="guide-admin" class="help-guide" hidden aria-live="polite"></article>
+      </main>
+    </div>
+    <script type="module" src="/src/help/main.ts"></script>
+  </body>
+</html>

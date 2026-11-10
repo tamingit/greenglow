@@ -1,0 +1,60 @@
+/* The demo's start page: the terminal page's colours, one card in the middle. */
+
+body.demo {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  margin: 0;
+  padding: 1rem;
+  box-sizing: border-box;
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+}
+
+.demo-card {
+  max-width: 30rem;
+  padding: 2rem;
+  border: 1px solid var(--page-border);
+  border-radius: 12px;
+  background: var(--page-panel);
+  text-align: center;
+}
+
+.demo-logo {
+  display: block;
+  width: min(20rem, 100%);
+  height: auto;
+  margin: 0 auto 0.5rem;
+}
+
+.demo-card h1 {
+  margin: 0.75rem 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.demo-card p {
+  line-height: 1.5;
+}
+
+.demo-start {
+  margin: 0.5rem 0;
+  padding: 0.6rem 1.4rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--bar-bg);
+  color: var(--bar-fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.demo-start:focus-visible {
+  outline: 3px solid var(--page-fg);
+  outline-offset: 2px;
+}
+
+.demo-small {
+  color: var(--page-muted);
+  font-size: 0.875rem;
+}

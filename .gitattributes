@@ -1,0 +1,8 @@
+# Text files use LF, even when edited from the Windows side.
+* text=auto eol=lf
+
+# Byte-stream recordings and fixtures must never be converted.
+*.bin binary
+*.png binary
+*.ico binary
+*.woff2 binary

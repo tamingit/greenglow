@@ -1,0 +1,37 @@
+# Local run of the deployable image: http://localhost:8080 (GREENGLOW_PORT in .env changes it)
+#   docker compose up --build
+# Needs .env (copy .env.example) and certs/ibmi-ca.pem for tls:// targets.
+services:
+  greenglow:
+    build:
+      context: .
+    image: greenglow-connect:dev
+    init: true
+    env_file: .env
+    environment:
+      # Paths and addresses inside the container; these override anything in .env.
+      Relay__CaFile: /app/certs/ibmi-ca.pem
+      Server__StaticDir: /app/wwwroot
+      Data__DbPath: /app/data/greenglow.db
+      Seed__ConnectionsFile: /app/config/connections.json
+      # The address people use: Server__PublicUrl from .env (https://… behind a TLS proxy), else
+      # this machine.
+      Server__PublicUrl: ${Server__PublicUrl:-http://localhost:${GREENGLOW_PORT:-8080}}
+      ASPNETCORE_HTTP_PORTS: ${GREENGLOW_PORT:-8080}
+    ports:
+      # Localhost only. Published on all interfaces, anyone on the network could
+      # reach the IBM i through this PC.
+      - '127.0.0.1:${GREENGLOW_PORT:-8080}:${GREENGLOW_PORT:-8080}'
+    volumes:
+      - ./certs:/app/certs:ro
+      - ./config:/app/config:ro
+      # The SQLite database: settings, users, connections, logs and shares.
+      - greenglow-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+
+volumes:
+  greenglow-data:

@@ -1,0 +1,41 @@
+{
+  "name": "greenglow-connect",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "packages/web",
+    "tools"
+  ],
+  "scripts": {
+    "dev": "node tools/src/dev.ts",
+    "build": "npm run build -w @greenglow/web",
+    "capture": "dotnet run --project server/tools/GreenGlow.Tools -- capture",
+    "replay": "dotnet run --project server/tools/GreenGlow.Tools -- replay",
+    "test": "vitest run && npm run test:server",
+    "test:watch": "vitest",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p e2e",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
+    "test:server": "dotnet test server/GreenGlow.slnx",
+    "e2e": "node tools/src/e2e.ts",
+    "ci": "npm run check && node tools/src/e2e.ts",
+    "icons": "node tools/src/icons.ts",
+    "screenshots": "node tools/src/e2e.ts --screenshots"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^24.19.0",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.9",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.71.0",
+    "vitest": "^5.0.3"
+  }
+}

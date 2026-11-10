@@ -1,0 +1,148 @@
+/* The keys panel, one of the side panels (side.css). Two columns of keys; Enter takes a whole
+   row. */
+
+.keys-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 10.5rem;
+  overflow: auto;
+  border: 1px solid var(--page-border);
+  border-radius: 8px;
+  background: var(--page-panel);
+  color: var(--page-fg);
+  font-size: 0.8125rem;
+}
+
+.keys-panel[hidden] {
+  display: none;
+}
+
+.keys-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.375rem 0.25rem 0.75rem;
+}
+
+.keys-panel-head h2 {
+  margin: 0;
+  color: var(--page-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.keys-panel-close {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--page-muted);
+  font: inherit;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.keys-panel-close:hover {
+  background: var(--page-border);
+  color: var(--page-fg);
+}
+
+.keys-panel-grid {
+  display: grid;
+  /* Never wider than the panel: a long label wraps instead (Other keys, below). */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem 0.625rem;
+}
+
+.keys-panel-key {
+  min-height: 1.875rem;
+  padding: 0 0.25rem;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--page-fg);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.keys-panel-key:hover {
+  background: var(--page-border);
+}
+
+.keys-panel-key:active {
+  transform: translateY(1px);
+}
+
+/* A gap between the function keys and the rest, and Enter across both columns. */
+.keys-panel-key[data-key='FieldExit'] {
+  margin-top: 0.5rem;
+}
+
+/* Only the first grid's: Erase EOF sits among Other keys. */
+.keys-panel-key[data-key='EraseInput'] {
+  margin-top: 0.5rem;
+}
+
+.keys-panel-key[data-key='Enter'] {
+  grid-column: 1 / -1;
+}
+
+/* Other keys: folded until opened. */
+.keys-panel-other {
+  border-top: 1px solid var(--page-border);
+}
+
+.keys-panel-other summary {
+  padding: 0.5rem 0.75rem;
+  color: var(--page-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.keys-panel button:focus-visible {
+  outline: 2px solid var(--page-fg);
+  outline-offset: 1px;
+}
+
+/* Other keys open: a second column beside the main keys, the panel twice as wide, so it never
+   needs to scroll. */
+.keys-panel[data-wide] {
+  width: 21rem;
+}
+
+.keys-panel[data-wide] .keys-panel-body {
+  display: flex;
+  align-items: flex-start;
+}
+
+.keys-panel[data-wide] .keys-panel-body > * {
+  flex: 1;
+  min-width: 0;
+}
+
+.keys-panel[data-wide] .keys-panel-other {
+  border-top: 0;
+  border-left: 1px solid var(--page-border);
+}
+
+.keys-panel[data-wide] .keys-panel-other summary {
+  padding-top: 0.375rem;
+}
+
+/* Labels such as Previous field take two lines rather than pushing the column off the panel. */
+.keys-panel-other .keys-panel-key {
+  line-height: 1.15;
+  white-space: normal;
+}

@@ -1,0 +1,248 @@
+/* The share dialog and the keyboard-control badge in the top bar. */
+
+.share-dialog {
+  box-sizing: border-box;
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  padding: 1.25rem 1.5rem;
+  overflow: visible auto;
+  border: 1px solid var(--page-border);
+  border-radius: 10px;
+  background: var(--page-panel);
+  color: var(--page-fg);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.35);
+  font-family: system-ui, sans-serif;
+}
+
+.share-dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.share-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.share-head {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+/* Close, in the corner where it is looked for. */
+.share-close {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: -0.4rem -0.6rem 0 0;
+  border: 1px solid var(--page-border);
+  border-radius: 999px;
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.share-close:hover {
+  background: var(--page-border);
+}
+
+.share-close:focus-visible {
+  outline: 2px solid var(--bar-focus);
+  outline-offset: 2px;
+}
+
+.share-dialog h3 {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.95rem;
+}
+
+.share-intro {
+  margin: 0 0 1rem;
+  color: var(--page-muted);
+}
+
+.share-dialog .admin-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--page-muted);
+}
+
+.share-dialog .admin-input,
+.share-access,
+.share-url {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font: inherit;
+}
+
+.share-people,
+.share-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.75rem 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-person {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+.share-person > span:first-child,
+.share-link-head > span {
+  flex: 1;
+}
+
+.share-link {
+  display: block;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--page-border);
+  border-radius: 8px;
+}
+
+.share-link-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  color: var(--page-muted);
+  font-size: 0.9rem;
+}
+
+.share-recipients {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-recipients .share-person {
+  flex-wrap: wrap;
+}
+
+.share-watching {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bar-bg) 18%, transparent);
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.share-url {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.share-btn {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--page-fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.share-btn-primary {
+  border-color: var(--bar-bg);
+  background: var(--bar-bg);
+  color: var(--bar-fg);
+}
+
+.share-btn-danger {
+  border-color: #b3261e;
+  color: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-look='greenglow']) .share-btn-danger {
+    border-color: #ff8f87;
+    color: #ff8f87;
+  }
+}
+
+.share-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.share-remove {
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--page-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.share-status {
+  min-height: 1.2em;
+  margin: 0.5rem 0 0;
+  color: var(--page-muted);
+}
+
+.share-result {
+  margin-top: 0.75rem;
+}
+
+.share-result p {
+  margin: 0 0 0.4rem;
+}
+
+.share-dialog :focus-visible {
+  outline: 2px solid var(--bar-focus);
+  outline-offset: 2px;
+}
+
+/* Who has the keyboard, in the top bar, for a shared session; and, for its owner, who it is
+   shared with. */
+.bar-control {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  color: var(--bar-muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.bar-control[hidden],
+.bar-control .bar-btn[hidden] {
+  display: none;
+}
+
+/* Narrow windows: the sharing panel says who has the keyboard, so the bar sheds the words
+   (still read out). */
+@media (max-width: 40rem) {
+  .bar-control #control-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}

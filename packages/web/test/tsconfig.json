@@ -1,0 +1,9 @@
+{
+  // Web tests run in Node and cover the parts that need no DOM (the key map).
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2023", "DOM"],
+    "types": ["node", "vite/client"]
+  },
+  "include": ["."]
+}

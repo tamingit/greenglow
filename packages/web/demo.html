@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1d4d2c" />
+    <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta
+      name="description"
+      content="Try GreenGlow Connect, a browser 5250 client for IBM i, on a fake IBM i."
+    />
+    <title>Try GreenGlow Connect</title>
+  </head>
+  <body class="demo">
+    <main class="demo-card">
+      <picture>
+        <source srcset="/brand/logo-dark.png" media="(prefers-color-scheme: dark)" />
+        <img
+          class="demo-logo"
+          src="/brand/logo.png"
+          alt="GreenGlow Connect"
+          width="960"
+          height="160"
+        />
+      </picture>
+      <h1>Try the demo</h1>
+      <p>
+        IBM i green screens in your browser. The demo connects to a fake IBM i with placeholder
+        screens: sign on with any user name and password, then try the looks, tabs, copy and paste,
+        and the function keys.
+      </p>
+      <form method="post" action="/auth/guest">
+        <input id="demo-return" type="hidden" name="returnUrl" value="/" />
+        <button type="submit" class="demo-start" autofocus>Start the demo</button>
+      </form>
+      <p class="demo-small">No account needed. Your demo sign-in lasts a few hours.</p>
+    </main>
+    <script type="module" src="/src/demo/main.ts"></script>
+  </body>
+</html>

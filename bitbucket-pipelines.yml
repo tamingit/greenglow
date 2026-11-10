@@ -1,0 +1,153 @@
+# GreenGlow Connect: build and test every branch; deploy main to production and other
+# branches to the test instance. Self-hosted shell runner with Docker.
+# Every setting comes from a repository or deployment variable (listed at the end).
+
+definitions:
+  steps:
+    - step: &build-test
+        name: Build & Test
+        runs-on:
+          - self.hosted
+          - linux.shell
+          - internal
+          - docker
+        script:
+          - unset DOCKER_HOST
+          # The CI image has .NET 10, Node 24 and Chromium; npm run ci runs the type checks,
+          # lint, format check, Vitest, dotnet test and the Playwright browser tests against
+          # the fake IBM i. With E2E_IBMI_* set, the live tests also run against that IBM i
+          # test system; without them they are skipped.
+          - docker build -f ci/Dockerfile -t "greenglow-ci:${BITBUCKET_BUILD_NUMBER}" .
+          - >-
+            docker run --rm
+            -e E2E_IBMI_TARGET
+            -e E2E_IBMI_USER
+            -e E2E_IBMI_PASSWORD
+            -e E2E_IBMI_NODE
+            -e E2E_IBMI_CA_PEM
+            "greenglow-ci:${BITBUCKET_BUILD_NUMBER}"
+          - docker rmi "greenglow-ci:${BITBUCKET_BUILD_NUMBER}" || true
+
+    # ── Production ──────────────────────────────────────────────────────────
+    - step: &docker-build-deploy
+        name: Docker Build & Deploy
+        runs-on:
+          - self.hosted
+          - linux.shell
+          - internal
+          - docker
+        deployment: production
+        script:
+          - unset DOCKER_HOST
+          - docker build -t greenglow-connect:latest .
+          - docker volume create greenglow-data
+          - docker stop greenglow-connect || true
+          - docker rm greenglow-connect || true
+          - >-
+            docker run -d
+            --name greenglow-connect
+            --restart unless-stopped
+            --read-only --tmpfs /tmp
+            --cap-drop ALL --security-opt no-new-privileges:true
+            -p "${GREENGLOW_BIND:-127.0.0.1}:${GREENGLOW_PORT:-5090}:${GREENGLOW_PORT:-5090}"
+            -e ASPNETCORE_HTTP_PORTS="${GREENGLOW_PORT:-5090}"
+            -v greenglow-data:/app/data
+            -e Server__PublicUrl="https://${GREENGLOW_HOST}"
+            -e Server__TrustForwardedHeaders=true
+            -e Entra__TenantId="${ENTRA_TENANT_ID}"
+            -e Entra__ClientId="${ENTRA_CLIENT_ID}"
+            -e Entra__ClientSecret="${ENTRA_CLIENT_SECRET}"
+            -e Entra__InitialAdminUpn="${GREENGLOW_ADMIN_UPN}"
+            -e Seed__ConnectionsJson="${GREENGLOW_CONNECTIONS_JSON}"
+            -e Relay__CaPem="${IBMI_CA_PEM}"
+            -e Sessions__MaxFrontends="${GREENGLOW_MAX_FRONTENDS:-2}"
+            -e Sessions__IdleMinutes="${GREENGLOW_IDLE_MINUTES:-5}"
+            -e Sessions__MaxConnections="${GREENGLOW_MAX_CONNECTIONS:-50}"
+            -e Cluster__NodeId="${GREENGLOW_NODE_ID:-1}"
+            greenglow-connect:latest
+
+    # ── Test ────────────────────────────────────────────────────────────────
+    - step: &docker-build-deploy-test
+        name: Docker Build & Deploy - Test
+        runs-on:
+          - self.hosted
+          - linux.shell
+          - internal
+          - docker
+        deployment: test
+        script:
+          - unset DOCKER_HOST
+          - docker build -t greenglow-connect:test .
+          - docker volume create greenglow-test-data
+          - docker stop greenglow-connect-test || true
+          - docker rm greenglow-connect-test || true
+          - >-
+            docker run -d
+            --name greenglow-connect-test
+            --restart unless-stopped
+            --read-only --tmpfs /tmp
+            --cap-drop ALL --security-opt no-new-privileges:true
+            -p "${GREENGLOW_BIND:-127.0.0.1}:${GREENGLOW_PORT:-5091}:${GREENGLOW_PORT:-5091}"
+            -e ASPNETCORE_HTTP_PORTS="${GREENGLOW_PORT:-5091}"
+            -v greenglow-test-data:/app/data
+            -e Server__PublicUrl="https://${GREENGLOW_HOST}"
+            -e Server__TrustForwardedHeaders=true
+            -e Entra__TenantId="${ENTRA_TENANT_ID}"
+            -e Entra__ClientId="${ENTRA_CLIENT_ID}"
+            -e Entra__ClientSecret="${ENTRA_CLIENT_SECRET}"
+            -e Entra__InitialAdminUpn="${GREENGLOW_ADMIN_UPN}"
+            -e Seed__ConnectionsJson="${GREENGLOW_CONNECTIONS_JSON}"
+            -e Relay__CaPem="${IBMI_CA_PEM}"
+            -e Sessions__MaxFrontends="${GREENGLOW_MAX_FRONTENDS:-2}"
+            -e Sessions__IdleMinutes="${GREENGLOW_IDLE_MINUTES:-5}"
+            -e Sessions__MaxConnections="${GREENGLOW_MAX_CONNECTIONS:-50}"
+            -e Cluster__NodeId="${GREENGLOW_NODE_ID:-8}"
+            greenglow-connect:test
+
+pipelines:
+  branches:
+    main:
+      - step: *build-test
+      - step: *docker-build-deploy
+
+    '**':
+      - step: *build-test
+      - step: *docker-build-deploy-test
+
+# ── Repository/deployment variables to configure in Bitbucket ────────────────
+# Set per deployment (production / test) where they differ.
+#
+# GREENGLOW_HOST              Public DNS name; the TLS proxy in front forwards to the port
+# GREENGLOW_PORT              The port the server listens on, inside the container and on
+#                              the host (default 5090 prod, 5091 test). Point the proxy at it
+# GREENGLOW_BIND              Host address to publish on (default 127.0.0.1: the proxy runs
+#                              on the same host; use 0.0.0.0 only if it doesn't)
+# ENTRA_TENANT_ID              Azure AD tenant GUID
+# ENTRA_CLIENT_ID              App registration client ID. Redirect URI:
+#                              https://<GREENGLOW_HOST>/auth/callback. Application
+#                              permissions with admin consent: User.ReadBasic.All,
+#                              GroupMember.Read.All (Microsoft Graph)
+# ENTRA_CLIENT_SECRET          Client secret                                   (mark as secured)
+# GREENGLOW_ADMIN_UPN         The first administrator's UPN; more are added in the admin UI
+# GREENGLOW_CONNECTIONS_JSON  The IBM i systems to seed, as in config/connections.example.json
+#                              (one line of JSON). Access may name groups by display name
+#                              and people by UPN (looked up in Entra ID), or give object IDs. Seeding only adds connections the database
+#                              doesn't have; after that they are managed in the admin UI
+# IBMI_CA_PEM                  The CA that issued the IBM i TLS certificate, as PEM text,
+#                              for tls:// connections. One line is fine (spaces for
+#                              newlines). Blank: tls:// accepts any certificate
+#                              (encrypted, not verified; the page says so)
+# GREENGLOW_MAX_FRONTENDS     Browsers per session (default 2)
+# GREENGLOW_IDLE_MINUTES      Minutes a session is kept with no browser (default 5)
+# GREENGLOW_MAX_CONNECTIONS   Sessions open at once on the server (default 50)
+# GREENGLOW_NODE_ID           The server's node number, 1 to 9, in its device names
+#                              (GG<node><number>; default 1 prod, 8 test). Unique among every
+#                              GreenGlow that reaches the same IBM i
+#
+# Live tests in Build & Test (optional; skipped when unset). A test system only, never
+# production:
+# E2E_IBMI_TARGET              tcp://host:23 or tls://host:992
+# E2E_IBMI_USER                IBM i user profile for the live tests
+# E2E_IBMI_PASSWORD            Its password                                    (mark as secured)
+# E2E_IBMI_NODE                The test server's node number (default 7): devices GG7001 and up
+# E2E_IBMI_CA_PEM              The test system's CA as PEM text, for a tls:// target

@@ -1,0 +1,41 @@
+# dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+*.timestamp-*.mjs
+
+# local environment and certificates (never commit hostnames, profiles or certs)
+.env
+.env.*
+!.env.example
+certs/
+
+# raw session recordings may contain passwords and business data
+test/recordings/
+
+# logs
+*.log
+
+# editor and OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# .NET build output
+bin/
+obj/
+TestResults/
+
+# local SQLite database (npm run dev)
+server/src/GreenGlow.Server/data/
+data/
+
+# Playwright output
+test-results/
+
+# real connection seed (host names)
+config/connections.json

@@ -1,0 +1,15 @@
+**/node_modules
+**/dist
+**/bin
+**/obj
+.git
+.env
+.env.*
+certs
+test
+docs
+.vscode
+*.md
+config/connections.json
+test-results
+.claude

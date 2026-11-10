@@ -1,0 +1,75 @@
+# The public demo: GreenGlow Connect in demo mode, with the fake IBM i beside it.
+#   docker compose -f compose.demo.yaml up --build
+# Then http://localhost:8080 (DEMO_PORT changes it). Visitors sign in as guests; there is no
+# Entra ID, no sharing and no administration. Behind a TLS proxy, set DEMO_PUBLIC_URL to the
+# public https:// address.
+#
+# PUB400 (pub400.com, a free public IBM i) is listed but disabled. Before enabling it:
+#   - PUB400's operator agrees to the demo using it (its rules say no commercial environments, and
+#     it limits connections from one address: every visitor connects from this server's);
+#   - set Relay__CaPem to Sectigo's root, which its certificate chains to, so it is verified;
+#   - give it a cap on sessions in total, not only per visitor (a later change to the server).
+# Then set "enabled": true below and restart: in demo mode the seed is the whole configuration.
+services:
+  greenglow:
+    build:
+      context: .
+    image: greenglow-connect:demo
+    init: true
+    environment:
+      ASPNETCORE_HTTP_PORTS: 8080
+      Server__PublicUrl: ${DEMO_PUBLIC_URL:-http://localhost:${DEMO_PORT:-8080}}
+      Server__TrustForwardedHeaders: ${DEMO_BEHIND_PROXY:-false}
+      Demo__Enabled: 'true'
+      Demo__GuestHours: 8
+      Demo__GuestsPerHour: 10
+      # Small limits: a demo, not a service.
+      Sessions__MaxConnections: 20
+      Sessions__MaxFrontends: 1
+      Sessions__IdleMinutes: 2
+      # Its own node number, so its device names never collide with another GreenGlow's on the
+      # same IBM i (it matters once PUB400 is on).
+      Cluster__NodeId: 5
+      Seed__ConnectionsJson: >-
+        {"connections": [
+          {"name": "demo", "label": "Demo IBM i", "url": "tcp://fakehost:2323",
+           "isDemo": true, "isTest": true, "maxSessionsPerUser": 2, "color": "#2e7d4f"},
+          {"name": "pub400", "label": "PUB400 (your own PUB400 user)", "url": "tls://pub400.com:992",
+           "isDemo": true, "maxSessionsPerUser": 1, "enabled": false}
+        ]}
+    depends_on: [fakehost]
+    networks: [demo, outside]
+    ports:
+      # Localhost only, for the TLS proxy on this host.
+      - '127.0.0.1:${DEMO_PORT:-8080}:8080'
+    volumes:
+      - greenglow-demo-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+
+  # Placeholder screens only. Reachable from the server alone: no published ports.
+  fakehost:
+    build:
+      context: .
+      target: fakehost
+    image: greenglow-fakehost:demo
+    init: true
+    networks: [demo]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+
+networks:
+  # The server and the fake IBM i; nothing else, and no way out.
+  demo:
+    internal: true
+  # The server's way out, for PUB400 later.
+  outside: {}
+
+volumes:
+  greenglow-demo-data:

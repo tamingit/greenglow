@@ -1,0 +1,545 @@
+/* GreenGlow: a light sage look on the same grid. The seven 5250 colours map to a designed
+   palette (normal text is a quiet green-grey, high intensity is strong ink), and every
+   colour keeps at least 5:1 contrast on the screen background. Night Shift (night-shift.css)
+   reuses these rules with darker tokens. */
+
+.terminal.greenglow {
+  --term-font: 'Cascadia Mono', Consolas, ui-monospace, monospace;
+  --term-status-font: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --term-bg: #dde9da;
+  --term-green: #3f5447;
+  --term-white: #10201a;
+  --term-red: #a8231b;
+  --term-turquoise: #0f636b;
+  --term-yellow: #765600;
+  --term-pink: #8d2a73;
+  --term-blue: #285683;
+  --term-cursor: #24603f;
+  --term-cursor-fill: color-mix(in srgb, var(--term-cursor) 30%, transparent);
+  --term-cursor-blend: normal;
+  --term-status: #4d5f53;
+  --term-rule: #bccbbd;
+  --term-message-rule: #bccbbd;
+  --term-focus: #24603f;
+  --term-shadow: 0 1px 2px rgb(21 32 26 / 6%), 0 12px 32px rgb(21 32 26 / 9%);
+  --line-height: 1.4;
+  --gh-field: #f4f8f2;
+  --gh-field-border: #a7baa8;
+  --gh-field-ink: #10201a;
+  --gh-focus: #24603f;
+  --gh-info: #285683;
+  --gh-required: #9a6a08;
+  --gh-header: color-mix(in srgb, var(--gh-focus) 12%, var(--term-bg));
+  --gh-accent: #24603f;
+  --gh-on-accent: #ffffff;
+  --gh-pill: #eef4ec;
+  --gh-pill-hover: #e1ede0;
+  --gh-pill-border: #a7baa8;
+  --gh-pill-ink: #10201a;
+  --gh-card: #ebf2e8;
+  --gh-card-border: #aebfad;
+  --gh-card-shadow:
+    0 1px 2px rgb(21 32 26 / 14%), 0 8px 18px rgb(21 32 26 / 12%), 0 22px 48px rgb(21 32 26 / 16%);
+  --gh-backdrop: #c7d4c4;
+  --gh-heading: color-mix(in srgb, var(--gh-focus) 11%, var(--term-bg));
+  --gh-heading-ink: color-mix(in srgb, var(--term-white) 78%, var(--term-green));
+  --gh-rule: color-mix(in srgb, var(--gh-focus) 24%, var(--term-bg));
+  --gh-stripe: color-mix(in srgb, var(--gh-focus) 6%, var(--term-bg));
+  --gh-hover: color-mix(in srgb, var(--gh-focus) 15%, var(--term-bg));
+
+  border-radius: 12px;
+  transition: background-color 0.12s;
+}
+
+/* Cascadia Mono's bold face has the same width, so emphasis never moves text off the
+   grid; synthesis stays off in case a fallback font lacks one. */
+.terminal.greenglow .row {
+  font-synthesis: none;
+}
+
+.terminal.greenglow .c-white {
+  font-weight: 600;
+}
+
+/* Reverse image becomes a tinted fill in the text's own colour. */
+.terminal.greenglow .row span.rev {
+  color: var(--ink);
+  background-color: color-mix(in srgb, var(--ink) 16%, transparent);
+  font-weight: 600;
+}
+
+.terminal.greenglow .cs {
+  background-image: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--ink) 35%, transparent) 1px,
+    transparent 1px
+  );
+}
+
+.terminal.greenglow .blink {
+  animation: gh-pulse 1.2s ease-in-out infinite;
+}
+
+.terminal.greenglow .status .inhibited {
+  font-weight: 600;
+}
+
+/* Layers: boxes under the text, placed on the grid from --r, --c, --w and --h. Each kind
+   has a --z for its order; live boxes are lifted (8) above a window's card (5), and inert
+   ones (behind the window) stay under it. Table bands sit just under the fields, so a
+   table inside a window is above the card but below the fields it holds. */
+.terminal.greenglow .grid {
+  isolation: isolate;
+}
+
+.terminal.greenglow .underlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.terminal.greenglow .underlay .box {
+  position: absolute;
+  box-sizing: border-box;
+  left: calc((var(--c) - 1) * var(--cell-width));
+  top: calc((var(--r) - 1) * var(--row-height));
+  width: calc(var(--w) * var(--cell-width));
+  height: calc(var(--h) * var(--row-height));
+  z-index: calc(var(--z, 0) + var(--lift, 8));
+}
+
+.terminal.greenglow .underlay .box.inert {
+  --lift: 0;
+
+  opacity: 0.45;
+}
+
+/* A window as a dialog: a card from the middle of one border column to the other, its
+   top border row a title bar. Around it the screen darkens and its text fades. */
+.terminal.greenglow:has(.underlay .window) {
+  background: var(--gh-backdrop);
+}
+
+.terminal.greenglow .underlay .window {
+  z-index: 5;
+  left: calc((var(--c) - 0.5) * var(--cell-width));
+  width: calc((var(--w) - 1) * var(--cell-width));
+  height: calc((var(--h) - 0.45) * var(--row-height));
+  overflow: hidden;
+  border: 1px solid var(--gh-card-border);
+  border-radius: calc(var(--row-height) * 0.35);
+  background: var(--gh-card);
+  box-shadow: var(--gh-card-shadow);
+}
+
+/* Without a title in the border, a thin strip marks the top; with one, a bar holds it. */
+.terminal.greenglow .underlay .window::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--gh-focus);
+}
+
+.terminal.greenglow .underlay .window.titled {
+  border-top-color: var(--gh-accent);
+}
+
+.terminal.greenglow .underlay .window.titled::before {
+  height: calc(var(--row-height) - 1px);
+  background: var(--gh-accent);
+}
+
+.terminal.greenglow .row span.g-border {
+  color: transparent;
+  text-decoration: none;
+  background: none;
+}
+
+.terminal.greenglow .row span.g-window-title {
+  --ink: var(--gh-on-accent);
+
+  font-weight: 600;
+}
+
+.terminal.greenglow .row span.g-inert:not(.g-message) {
+  opacity: 0.45;
+}
+
+/* Input fields. A box reaches a little into the blank attribute cells on each side. */
+.terminal.greenglow .underlay .field {
+  left: calc((var(--c) - 1.3) * var(--cell-width));
+  width: calc((var(--w) + 0.6) * var(--cell-width));
+  top: calc((var(--r) - 1) * var(--row-height) + var(--row-height) * 0.07);
+  height: calc(var(--row-height) * 0.86);
+  background: var(--gh-field);
+  border: 1px solid var(--gh-field-border);
+  border-radius: calc(var(--row-height) * 0.22);
+}
+
+.terminal.greenglow .underlay .field.reverse {
+  background: color-mix(in srgb, var(--gh-focus) 14%, var(--gh-field));
+}
+
+.terminal.greenglow .underlay .field.red {
+  border-color: color-mix(in srgb, var(--term-red) 55%, var(--gh-field-border));
+}
+
+.terminal.greenglow .underlay .field.focus {
+  border-color: var(--gh-focus);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--gh-focus) 25%, transparent);
+}
+
+.terminal.greenglow .underlay .field.error {
+  border-color: var(--term-red);
+  background: color-mix(in srgb, var(--term-red) 7%, var(--gh-field));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--term-red) 22%, transparent);
+}
+
+/* Mandatory enter or mandatory fill: a small dot in the corner. */
+.terminal.greenglow .underlay .field.required::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--gh-required);
+}
+
+/* The box shows the field, so its text drops the underline and reverse background. */
+.terminal.greenglow .row span.g-input {
+  text-decoration: none;
+  background-color: transparent;
+}
+
+.terminal.greenglow .row span.g-input.c-green {
+  --ink: var(--gh-field-ink);
+}
+
+/* The message line as a banner, for as long as the host shows it. Its tint is mixed with
+   the screen's colour, so it looks the same on the darkened panel around a window. */
+.terminal.greenglow .underlay .message {
+  left: calc(var(--cell-width) * -0.3);
+  width: calc((var(--w) + 0.6) * var(--cell-width));
+  top: calc((var(--r) - 1) * var(--row-height) + var(--row-height) * 0.04);
+  height: calc(var(--row-height) * 0.92);
+  border-radius: calc(var(--row-height) * 0.25);
+  background: color-mix(in srgb, var(--gh-info) 12%, var(--term-bg));
+  box-shadow: inset 3px 0 0 var(--gh-info);
+}
+
+.terminal.greenglow .underlay .message.error {
+  background: color-mix(in srgb, var(--term-red) 13%, var(--term-bg));
+  box-shadow: inset 3px 0 0 var(--term-red);
+}
+
+.terminal.greenglow .underlay .message.icon::before {
+  --icon: min(var(--row-height) * 0.62, var(--cell-width) * 1.15);
+
+  content: '';
+  position: absolute;
+  /* Centred on column 1, which starts 0.3 cells into the box. */
+  left: calc(var(--cell-width) * 0.8 - var(--icon) / 2);
+  top: 50%;
+  width: var(--icon);
+  aspect-ratio: 1;
+  translate: 0 -50%;
+  background: var(--gh-info);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM7 3h2v2H7zm0 3.5h2v6.5H7z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.terminal.greenglow .underlay .message.error.icon::before {
+  background: var(--term-red);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zM7 3h2v6.5H7zm0 7.5h2v2H7z'/%3E%3C/svg%3E");
+}
+
+.terminal.greenglow .row span.g-message {
+  font-weight: 600;
+}
+
+/* Row 1 as a header band; the program ID as a chip that copies it. */
+.terminal.greenglow .underlay .header {
+  left: calc(var(--cell-width) * -0.5);
+  width: calc((var(--w) + 1) * var(--cell-width));
+  top: calc(var(--row-height) * 0.02);
+  height: calc(var(--row-height) * 0.96);
+  border-radius: calc(var(--row-height) * 0.3);
+  background: var(--gh-header);
+}
+
+.terminal.greenglow .underlay :is(.chip, .pill, .keycap, .pager) {
+  top: calc((var(--r) - 1) * var(--row-height) + var(--row-height) * 0.12);
+  height: calc(var(--row-height) * 0.76);
+  transition:
+    opacity 0.1s,
+    background-color 0.1s,
+    border-color 0.1s;
+}
+
+.terminal.greenglow .underlay .chip {
+  --z: 2;
+
+  left: calc((var(--c) - 1.45) * var(--cell-width));
+  width: calc((var(--w) + 0.9) * var(--cell-width));
+  border-radius: 999px;
+  background: var(--gh-accent);
+}
+
+.terminal.greenglow .underlay .chip.hover {
+  background: color-mix(in srgb, var(--gh-accent) 82%, var(--gh-on-accent));
+}
+
+.terminal.greenglow .underlay .chip.pressed,
+.terminal.greenglow .underlay .chip.copied {
+  background: color-mix(in srgb, var(--gh-accent) 65%, var(--gh-on-accent));
+}
+
+.terminal.greenglow .row span.g-id {
+  --ink: var(--gh-on-accent);
+
+  font-weight: 600;
+}
+
+.terminal.greenglow .row span.g-title {
+  --ink: var(--term-white);
+
+  font-weight: 700;
+}
+
+/* Function-key legend items as pills, with a keycap behind the key's name. */
+.terminal.greenglow .underlay .pill {
+  --z: 1;
+
+  /* Legends may put only one space between items, so pills stay inside half of it. */
+  left: calc((var(--c) - 1.45) * var(--cell-width));
+  width: calc((var(--w) + 0.95) * var(--cell-width));
+  border: 1px solid var(--gh-pill-border);
+  border-radius: 999px;
+  background: var(--gh-pill);
+}
+
+.terminal.greenglow .underlay .pill.hover {
+  border-color: var(--gh-accent);
+  background: var(--gh-pill-hover);
+}
+
+.terminal.greenglow .underlay .pill.pressed {
+  background: color-mix(in srgb, var(--gh-accent) 20%, var(--gh-pill));
+}
+
+.terminal.greenglow .underlay .keycap {
+  --z: 2;
+
+  left: calc((var(--c) - 1.3) * var(--cell-width));
+  width: calc((var(--w) + 0.6) * var(--cell-width));
+  top: calc((var(--r) - 1) * var(--row-height) + var(--row-height) * 0.2);
+  height: calc(var(--row-height) * 0.6);
+  border-radius: calc(var(--row-height) * 0.18);
+  background: var(--gh-accent);
+}
+
+.terminal.greenglow .row span.g-keycap {
+  --ink: var(--gh-on-accent);
+
+  font-weight: 600;
+}
+
+.terminal.greenglow .row span.g-sep {
+  color: transparent;
+}
+
+.terminal.greenglow .row span.g-pill {
+  --ink: var(--gh-pill-ink);
+}
+
+/* While the host has the keyboard, clicks wait for it: the clickable parts dim after a
+   moment, so short waits don't flicker. */
+.terminal.greenglow.locked .underlay :is(.chip, .pill, .keycap, .pager),
+.terminal.greenglow.locked .row span:is(.g-keycap, .g-pill, .g-id, .g-pager),
+.terminal.greenglow.locked .status .keys {
+  opacity: 0.5;
+  transition: opacity 0.1s 150ms;
+}
+
+/* Enter, Page Up and Page Down in the status line, for mouse users. */
+.terminal.greenglow .status .keys {
+  display: flex;
+  gap: 0.5em;
+  margin-left: auto;
+}
+
+.terminal.greenglow .status .keys button {
+  padding: 0 0.75em;
+  border: 1px solid var(--gh-pill-border);
+  border-radius: 999px;
+  background: var(--gh-pill);
+  color: var(--gh-pill-ink);
+  font: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.terminal.greenglow .status .keys button:hover {
+  border-color: var(--gh-accent);
+  background: var(--gh-pill-hover);
+}
+
+.terminal.greenglow .status .keys button.pressed {
+  background: color-mix(in srgb, var(--gh-accent) 20%, var(--gh-pill));
+}
+
+.terminal.greenglow .status .keys + .position {
+  margin-left: 0;
+}
+
+/* The rules of the field holding the cursor, beside the cursor position. */
+.terminal.greenglow .status .field-info {
+  margin-left: auto;
+}
+
+.terminal.greenglow .status .field-info + :is(.keys, .position) {
+  margin-left: 0;
+}
+
+/* Subfile tables. Stripes tint every second record, the heading band holds the column
+   titles (and the filter row, whose fields become search boxes), and the hovered record
+   lights up. Bands sit under the fields (--z below 0) and, inside a window, above its card. */
+.terminal.greenglow .underlay .table {
+  --z: -2;
+  --s: 1;
+
+  left: calc((var(--c) - 1.3) * var(--cell-width));
+  width: calc((var(--w) + 0.6) * var(--cell-width));
+  background-image: linear-gradient(to bottom, transparent 50%, var(--gh-stripe) 50%);
+  background-size: 100% calc(var(--row-height) * var(--s) * 2);
+}
+
+.terminal.greenglow .underlay .table.step2 {
+  --s: 2;
+}
+
+.terminal.greenglow .underlay .table.step3 {
+  --s: 3;
+}
+
+.terminal.greenglow .underlay .heading {
+  --z: -2;
+
+  left: calc((var(--c) - 1.3) * var(--cell-width));
+  width: calc((var(--w) + 0.6) * var(--cell-width));
+  border-bottom: 1px solid var(--gh-rule);
+  border-radius: calc(var(--row-height) * 0.3) calc(var(--row-height) * 0.3) 0 0;
+  background: var(--gh-heading);
+}
+
+.terminal.greenglow .underlay .band {
+  --z: -1;
+
+  left: calc((var(--c) - 1.3) * var(--cell-width));
+  width: calc((var(--w) + 0.6) * var(--cell-width));
+  border-radius: calc(var(--row-height) * 0.2);
+}
+
+.terminal.greenglow .underlay .band.lit {
+  background: var(--gh-hover);
+}
+
+.terminal.greenglow .row span.g-heading {
+  --ink: var(--gh-heading-ink);
+
+  background: none;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* Amounts: digits stay on the grid; a credit (312.40-) stands out in red. */
+.terminal.greenglow .row span.g-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.terminal.greenglow .row span.g-credit {
+  --ink: var(--term-red);
+
+  font-weight: 600;
+}
+
+/* The filter row: rounded search boxes, and a magnifier in the option column. */
+.terminal.greenglow .underlay .field.search {
+  border-radius: calc(var(--row-height) * 0.38);
+}
+
+.terminal.greenglow .underlay .search:not(.field) {
+  --z: 0;
+
+  left: calc((var(--c) - 1) * var(--cell-width));
+  width: calc(var(--w) * var(--cell-width));
+  top: calc((var(--r) - 1) * var(--row-height));
+  height: var(--row-height);
+  background: color-mix(in srgb, var(--gh-heading-ink) 60%, transparent);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M6.5 0a6.5 6.5 0 0 1 5.1 10.5l4.2 4.2-1.4 1.4-4.2-4.2A6.5 6.5 0 1 1 6.5 0zm0 2a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9z'/%3E%3C/svg%3E")
+    center / min(calc(var(--row-height) * 0.5), calc(var(--w) * var(--cell-width) * 1.3)) no-repeat;
+}
+
+/* More... and Bottom as a button that rolls the list; an arrow shows which way. */
+.terminal.greenglow .underlay .pager {
+  --z: 1;
+
+  left: calc((var(--c) - 2.5) * var(--cell-width));
+  width: calc((var(--w) + 3) * var(--cell-width));
+  border: 1px solid var(--gh-pill-border);
+  border-radius: 999px;
+  background: var(--gh-pill);
+}
+
+.terminal.greenglow .underlay .pager::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--cell-width) * 0.3);
+  top: 50%;
+  width: calc(var(--row-height) * 0.36);
+  aspect-ratio: 1;
+  translate: 0 -50%;
+  background: var(--gh-focus);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2.5 5.5 8 11l5.5-5.5-1.4-1.4L8 8.2 3.9 4.1z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.terminal.greenglow .underlay .pager.bottom::before {
+  rotate: 180deg;
+}
+
+.terminal.greenglow .underlay .pager.hover {
+  border-color: var(--gh-accent);
+  background: var(--gh-pill-hover);
+}
+
+.terminal.greenglow .underlay .pager.pressed {
+  background: color-mix(in srgb, var(--gh-accent) 20%, var(--gh-pill));
+}
+
+.terminal.greenglow .row span.g-pager {
+  --ink: var(--gh-pill-ink);
+
+  font-weight: 600;
+}
+
+@keyframes gh-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal.greenglow .blink,
+  .terminal.greenglow .cursor {
+    animation: none;
+  }
+
+  .terminal.greenglow {
+    transition: none;
+  }
+}

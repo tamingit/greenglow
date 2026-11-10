@@ -1,0 +1,36 @@
+/* Night Shift: GreenGlow's rules with low-glare tokens for dark rooms and late shifts. */
+
+.terminal.greenglow.night {
+  --term-bg: #0f1613;
+  --term-green: #93ac9e;
+  --term-white: #e8f1ea;
+  --term-red: #ff8c82;
+  --term-turquoise: #6fd5d5;
+  --term-yellow: #f0c969;
+  --term-pink: #e79bda;
+  --term-blue: #8fb9ff;
+  --term-cursor: #7cd4a4;
+  --term-status: #9db1a5;
+  --term-rule: #2f443a;
+  --term-message-rule: #2f443a;
+  --term-focus: #7cd4a4;
+  --term-shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 12px 32px rgb(0 0 0 / 35%);
+  --gh-field: #16221c;
+  --gh-field-border: #34493e;
+  --gh-field-ink: #e8f1ea;
+  --gh-focus: #7cd4a4;
+  --gh-info: #8fb9ff;
+  --gh-required: #f0c969;
+  --gh-header: color-mix(in srgb, var(--gh-focus) 9%, var(--term-bg));
+  --gh-accent: color-mix(in srgb, #7cd4a4 24%, #0f1613);
+  --gh-on-accent: #9fe3be;
+  --gh-pill: #16221c;
+  --gh-pill-hover: #1c2c24;
+  --gh-pill-border: #34493e;
+  --gh-pill-ink: #e8f1ea;
+  --gh-card: #17241e;
+  --gh-card-border: #3a5246;
+  --gh-card-shadow:
+    0 1px 2px rgb(0 0 0 / 50%), 0 10px 24px rgb(0 0 0 / 40%), 0 24px 56px rgb(0 0 0 / 50%);
+  --gh-backdrop: #0a0f0d;
+}

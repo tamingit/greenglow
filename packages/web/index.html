@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Installable as an app (no service worker: nothing works offline). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#1d4d2c" />
+    <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="GreenGlow" />
+    <title>GreenGlow Connect</title>
+  </head>
+  <body>
+    <header class="app-bar">
+      <div class="bar-inner">
+        <div class="bar-brand" title="GreenGlow Connect">
+          <img class="bar-brand-mark" src="/icons/icon-192.png" alt="" width="32" height="32" />
+        </div>
+
+        <nav id="tab-strip" class="tab-strip" aria-label="Session tabs"></nav>
+
+        <span id="control" class="bar-control" hidden>
+          <span id="control-text" role="status"></span>
+          <button id="take-control" type="button" class="bar-btn">Take control</button>
+        </span>
+        <div id="status" class="bar-status" role="status" aria-atomic="true" data-state="idle">
+          <span class="bar-status-dot" aria-hidden="true"></span>
+          <span id="status-text" class="bar-status-text">Loading targets…</span>
+        </div>
+
+        <button
+          id="fullscreen"
+          type="button"
+          class="bar-btn bar-btn-icon bar-fullscreen"
+          aria-label="Full screen"
+          title="Full screen"
+        >
+          <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" />
+          </svg>
+        </button>
+
+        <details id="bar-menu" class="bar-menu">
+          <summary class="bar-btn bar-btn-icon" aria-label="Menu" title="Menu">
+            <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
+            </svg>
+          </summary>
+          <div class="bar-menu-panel">
+            <div class="bar-menu-user">
+              <span id="user-name" class="bar-menu-user-name"></span>
+              <span id="user-upn" class="bar-menu-user-upn"></span>
+            </div>
+            <div id="menu-status" class="bar-menu-status" data-state="idle">
+              <span class="bar-status-dot" aria-hidden="true"></span>
+              <span id="menu-status-text"></span>
+            </div>
+            <div class="bar-menu-section">
+              <span id="look-label" class="bar-menu-heading">Look</span>
+              <div
+                id="look"
+                class="bar-segmented"
+                role="radiogroup"
+                aria-labelledby="look-label"
+              ></div>
+            </div>
+            <button id="menu-theme" type="button" class="bar-menu-item">
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M8 1.5a6.5 6.5 0 1 0 0 13c.9 0 1.3-.7 1-1.4-.4-.9.2-1.6 1.1-1.6h1.4a3 3 0 0 0 3-3A6.5 6.5 0 0 0 8 1.5ZM4.5 8h.01M6 5h.01M10 5h.01"
+                />
+              </svg>
+              Customize colours…
+            </button>
+            <div class="bar-menu-section">
+              <span id="rule-line-label" class="bar-menu-heading">Rule line</span>
+              <div
+                id="rule-line"
+                class="bar-segmented"
+                role="radiogroup"
+                aria-labelledby="rule-line-label"
+              ></div>
+            </div>
+            <div class="bar-menu-section">
+              <span id="screen-size-label" class="bar-menu-heading">Screen size</span>
+              <div
+                id="screen-size"
+                class="bar-segmented"
+                role="radiogroup"
+                aria-labelledby="screen-size-label"
+              ></div>
+              <label id="font-size-row" class="bar-font-size" hidden>
+                Font size
+                <select id="font-size"></select>
+              </label>
+            </div>
+            <div id="color-section" class="bar-menu-section" hidden>
+              <span id="color-label" class="bar-menu-heading">Colour</span>
+              <div class="bar-color">
+                <input id="my-color" type="color" aria-labelledby="color-label" />
+                <button id="color-reset" type="button" class="bar-btn" hidden>
+                  Use the system’s colour
+                </button>
+              </div>
+            </div>
+            <button id="menu-share" type="button" class="bar-menu-item" hidden>
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path
+                  d="M11.5 5.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM4.5 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM11.5 14.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM6.3 7l3.4-2M6.3 9l3.4 2"
+                />
+              </svg>
+              Share this session…
+            </button>
+            <button id="menu-disconnect" type="button" class="bar-menu-item" hidden>
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 1.5v6M4.5 3.8a5.5 5.5 0 1 0 7 0" />
+              </svg>
+              Disconnect
+            </button>
+            <button
+              id="menu-sharing"
+              type="button"
+              class="bar-menu-item"
+              aria-controls="sharing-panel"
+              aria-expanded="false"
+            >
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2.5 2.5h11v11h-11ZM9.5 2.5v11" />
+              </svg>
+              <span id="menu-sharing-label">Show sharing panel</span>
+            </button>
+            <button
+              id="menu-keys-panel"
+              type="button"
+              class="bar-menu-item"
+              aria-controls="keys-panel"
+              aria-expanded="false"
+            >
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="1.5" y="4" width="13" height="8.5" rx="1.5" />
+                <path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 10h6" />
+              </svg>
+              <span id="menu-keys-panel-label">Show keys panel</span>
+            </button>
+            <a id="menu-admin" class="bar-menu-item" href="/admin.html" hidden>
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 1.5l5.5 2v4c0 3.2-2.3 5.8-5.5 7-3.2-1.2-5.5-3.8-5.5-7v-4Z" />
+              </svg>
+              Administration
+            </a>
+            <button id="menu-fullscreen" type="button" class="bar-menu-item">
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" />
+              </svg>
+              Full screen
+            </button>
+            <button
+              id="menu-log"
+              type="button"
+              class="bar-menu-item"
+              aria-controls="log-panel"
+              aria-expanded="false"
+            >
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M5.5 4h8M5.5 8h8M5.5 12h8M2.5 4h.01M2.5 8h.01M2.5 12h.01" />
+              </svg>
+              <span id="menu-log-label">Show session log</span>
+            </button>
+            <a
+              id="menu-help"
+              class="bar-menu-item"
+              href="/help.html"
+              target="_blank"
+              rel="noopener"
+            >
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="8" cy="8" r="6" />
+                <path d="M6.2 6.3a1.9 1.9 0 0 1 3.7.4c0 1.3-1.9 1.6-1.9 2.8M8 11.5h.01" />
+              </svg>
+              Help
+            </a>
+            <form method="post" action="/auth/signout" class="bar-menu-form">
+              <button id="menu-signout" type="submit" class="bar-menu-item">
+                <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M6 2.5H3.5v11H6M10.5 5l3 3-3 3M13.5 8H6" />
+                </svg>
+                Sign out
+              </button>
+            </form>
+            <p class="bar-menu-foot">GreenGlow Connect</p>
+          </div>
+        </details>
+      </div>
+    </header>
+    <main>
+      <div id="in-use" class="notice" hidden>
+        <p id="in-use-message"></p>
+        <button id="retry" type="button">Try again</button>
+        <button id="spare" type="button">Use a spare name</button>
+      </div>
+      <div class="workspace">
+        <div id="stage">
+          <div
+            id="terminal"
+            tabindex="0"
+            role="application"
+            aria-roledescription="5250 terminal"
+            aria-label="5250 screen"
+          ></div>
+        </div>
+      </div>
+      <section id="log-panel" class="log-panel" aria-labelledby="log-title" hidden>
+        <div class="log-head">
+          <h2 id="log-title">Session log</h2>
+          <button
+            id="log-close"
+            type="button"
+            class="log-close"
+            aria-label="Close session log"
+            title="Close"
+          >
+            <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M4 4l8 8M12 4l-8 8" />
+            </svg>
+          </button>
+        </div>
+        <ol id="log"></ol>
+      </section>
+    </main>
+    <!-- The side panels: tabs on the window's right edge, each pulling its panel out from it. -->
+    <div class="side">
+      <div class="side-panels">
+        <aside id="keys-panel" class="keys-panel" aria-labelledby="keys-panel-title" hidden></aside>
+        <aside
+          id="sharing-panel"
+          class="sharing-panel"
+          aria-labelledby="sharing-title"
+          hidden
+        ></aside>
+        <aside id="macros-panel" class="macros-panel" aria-labelledby="macros-title" hidden></aside>
+        <aside
+          id="printer-panel"
+          class="printer-panel"
+          aria-labelledby="printer-title"
+          hidden
+        ></aside>
+      </div>
+      <div class="side-tabs" aria-label="Side panels" role="group">
+        <button
+          type="button"
+          class="side-tab"
+          data-side="keys"
+          aria-controls="keys-panel"
+          aria-expanded="false"
+          title="Keys (Alt+K)"
+        >
+          Keys
+        </button>
+        <button
+          type="button"
+          class="side-tab"
+          data-side="sharing"
+          aria-controls="sharing-panel"
+          aria-expanded="false"
+          title="Share (Alt+S)"
+        >
+          Share
+        </button>
+        <button
+          type="button"
+          class="side-tab"
+          data-side="macros"
+          aria-controls="macros-panel"
+          aria-expanded="false"
+          title="Macros (Alt+M)"
+        >
+          Macros
+        </button>
+        <button
+          type="button"
+          class="side-tab"
+          data-side="printer"
+          aria-controls="printer-panel"
+          aria-expanded="false"
+          title="Printer output (Alt+P)"
+        >
+          Printer
+        </button>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
