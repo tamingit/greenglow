@@ -1,0 +1,8 @@
+# Prose is formatted by hand
+*.md
+package-lock.json
+test/recordings/
+test/fixtures/
+**/bin/
+**/obj/
+.claude/

@@ -1,0 +1,276 @@
+/* The terminal's structure, shared by every look. A look sets the --term-* tokens (see
+   classic.css). Sizes come from the renderer: --cell-width, --font-size, --glyph-width,
+   --glyph-scale, --columns, --lines, and --cursor-row and --cursor-column on the grid. */
+
+.terminal {
+  --row-height: calc(var(--font-size, 14px) * var(--line-height));
+
+  position: relative;
+  padding: 0.5rem;
+  background: var(--term-bg);
+  border-radius: 6px;
+  box-shadow: var(--term-shadow, none);
+  outline: none;
+  font-family: var(--term-font);
+  font-size: var(--font-size, 14px);
+  line-height: var(--line-height);
+  cursor: text;
+  user-select: none;
+  /* A vertical swipe pages the screen (pointer.ts); pinching still zooms the page. */
+  touch-action: pan-x pinch-zoom;
+}
+
+/* The box a touch screen's on-screen keyboard types into (softkeys.ts): on the cursor, so
+   the page scrolls to it, and unseen. 16px keeps iOS from zooming in when it takes focus. */
+.terminal .soft-input {
+  position: absolute;
+  left: calc(var(--cursor-column, 0) * var(--cell-width));
+  top: calc(var(--cursor-row, 0) * var(--row-height));
+  z-index: -1;
+  width: var(--cell-width);
+  height: var(--row-height);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px;
+  opacity: 0;
+  resize: none;
+  pointer-events: none;
+}
+
+/* Over something a click acts on (a function key the screen names), in any look. */
+.terminal.over-target {
+  cursor: pointer;
+}
+
+.terminal:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--term-focus),
+    var(--term-shadow, 0 0 #0000);
+}
+
+.terminal .probe {
+  position: absolute;
+  visibility: hidden;
+  white-space: pre;
+  font-size: 100px;
+}
+
+.terminal .grid {
+  position: relative;
+  margin: 0 auto;
+  width: calc(var(--cell-width, 8px) * var(--columns, 80));
+  height: calc(var(--row-height) * var(--lines, 24));
+}
+
+.terminal .row {
+  height: var(--row-height);
+  white-space: pre;
+  overflow: hidden;
+}
+
+/* Stretch: the cells are wider or narrower than the font's characters, so each row's text
+   is scaled across to fill them. Inside a row a cell is one character wide again. `scale`
+   rather than `transform`, so the paging slide still runs on top of it. */
+.terminal[data-size='stretch'] .row {
+  --cell-width: var(--glyph-width);
+
+  width: calc(100% / var(--glyph-scale, 1));
+  scale: var(--glyph-scale, 1) 1;
+  transform-origin: 0 0;
+}
+
+.terminal .row.message-line {
+  border-top: 1px solid var(--term-message-rule);
+}
+
+/* Each span takes its colour from --ink, which the attribute's colour class sets. */
+.terminal .row span {
+  color: var(--ink, var(--term-green));
+}
+
+.terminal .c-green {
+  --ink: var(--term-green);
+}
+.terminal .c-white {
+  --ink: var(--term-white);
+}
+.terminal .c-red {
+  --ink: var(--term-red);
+}
+.terminal .c-turquoise {
+  --ink: var(--term-turquoise);
+}
+.terminal .c-yellow {
+  --ink: var(--term-yellow);
+}
+.terminal .c-pink {
+  --ink: var(--term-pink);
+}
+.terminal .c-blue {
+  --ink: var(--term-blue);
+}
+
+.terminal .row span.rev {
+  color: var(--term-bg);
+  background-color: var(--ink);
+}
+
+.terminal .ul {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.terminal .cs {
+  background-image: linear-gradient(to right, var(--ink) 1px, transparent 1px);
+  background-size: var(--cell-width) 30%;
+  background-repeat: repeat-x;
+  background-position: 0 100%;
+}
+
+.terminal .blink {
+  animation: blink 1s steps(1) infinite;
+}
+
+.terminal .cursor {
+  position: absolute;
+  left: calc(var(--cursor-column, 0) * var(--cell-width));
+  top: calc(var(--cursor-row, 0) * var(--row-height));
+  width: var(--cell-width);
+  height: var(--row-height);
+  pointer-events: none;
+  border-bottom: 3px solid var(--term-cursor);
+  animation: blink 1s steps(1) infinite;
+}
+
+/* The rule line (ACS's crosshair), red as in ACS: along the bottom of the cursor's row and
+   down the left of its column, over everything the looks draw, never taking a click. */
+.terminal .rule-row,
+.terminal .rule-column {
+  position: absolute;
+  z-index: 20;
+  display: none;
+  background: var(--term-rule-line, #ff3b3b);
+  pointer-events: none;
+}
+
+.terminal .rule-row {
+  left: 0;
+  right: 0;
+  top: calc((var(--cursor-row, 0) + 1) * var(--row-height) - 1px);
+  height: 1px;
+}
+
+.terminal .rule-column {
+  top: 0;
+  bottom: 0;
+  left: calc(var(--cursor-column, 0) * var(--cell-width));
+  width: 1px;
+}
+
+.terminal:is([data-rule-line='crosshair'], [data-rule-line='horizontal']) .rule-row,
+.terminal:is([data-rule-line='crosshair'], [data-rule-line='vertical']) .rule-column {
+  display: block;
+}
+
+/* After Page Down or Page Up, a table's rows slide into place from below or above, so
+   paging feels like scrolling (renderer.slide). Nothing moves on the IBM i; it is only how
+   the new page appears. */
+.terminal .row.slide-up {
+  animation: row-slide-up 180ms ease-out;
+}
+
+.terminal .row.slide-down {
+  animation: row-slide-down 180ms ease-out;
+}
+
+@keyframes row-slide-up {
+  from {
+    opacity: 0.25;
+    transform: translateY(calc(var(--row-height) * 0.75));
+  }
+}
+
+@keyframes row-slide-down {
+  from {
+    opacity: 0.25;
+    transform: translateY(calc(var(--row-height) * -0.75));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal .row.slide-up,
+  .terminal .row.slide-down {
+    animation: none;
+  }
+}
+
+.terminal .cursor.insert {
+  border-bottom: none;
+  background: var(--term-cursor-fill, var(--term-cursor));
+  mix-blend-mode: var(--term-cursor-blend, difference);
+}
+
+.terminal .cursor.waiting {
+  animation-duration: 0.4s;
+}
+
+.terminal:not(:focus) .cursor {
+  animation: none;
+  opacity: 0.5;
+}
+
+.terminal .status {
+  display: flex;
+  gap: 1.5em;
+  margin-top: 0.3rem;
+  padding-top: 0.2rem;
+  border-top: 1px solid var(--term-rule);
+  color: var(--term-status);
+  font-family: var(--term-status-font, inherit);
+  font-size: max(11px, calc(var(--font-size, 14px) * 0.85));
+  white-space: pre;
+}
+
+.terminal .status .inhibited {
+  color: var(--term-yellow);
+}
+
+.terminal .status .position {
+  margin-left: auto;
+}
+
+.terminal.flash {
+  animation: flash 0.25s ease-out;
+}
+
+@keyframes blink {
+  50% {
+    visibility: hidden;
+  }
+}
+
+@keyframes flash {
+  from {
+    box-shadow: 0 0 0 3px var(--term-yellow);
+  }
+}
+
+/* The selected rectangle, over the text. It tints with the look's focus colour, so it
+   reads on both the dark and the light looks; --r, --c, --w and --h count cells. */
+.terminal .selection {
+  position: absolute;
+  left: calc((var(--c) - 1) * var(--cell-width));
+  top: calc((var(--r) - 1) * var(--row-height));
+  width: calc(var(--w) * var(--cell-width));
+  height: calc(var(--h) * var(--row-height));
+  box-sizing: border-box;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--term-focus) 38%, transparent);
+  outline: 1px solid var(--term-focus);
+  outline-offset: -1px;
+}

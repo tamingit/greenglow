@@ -1,0 +1,143 @@
+/* The side panels (Keys, Share, Macros): a column of tabs on the window's right edge, each
+   pulling its panel out from the edge. One is open at a time. The page keeps clear of them:
+   main and the tab strip leave --side-space on the right, so the screen refits beside an open
+   panel instead of under it. On a narrow window an open panel lies over the screen. */
+
+:root {
+  --side-tabs: 1.875rem;
+  --side-space: var(--side-tabs);
+}
+
+:root[data-side='keys'] {
+  --side-space: calc(var(--side-tabs) + 10.5rem);
+}
+
+:root[data-side='keys'][data-keys-wide] {
+  --side-space: calc(var(--side-tabs) + 21rem);
+}
+
+:root[data-side='sharing'] {
+  --side-space: calc(var(--side-tabs) + 18rem);
+}
+
+:root[data-side='macros'] {
+  --side-space: calc(var(--side-tabs) + 16rem);
+}
+
+:root[data-side='printer'] {
+  --side-space: calc(var(--side-tabs) + 20rem);
+}
+
+/* The whole width of the window, however wide, but never under the side: a scaled screen
+   grows to fill it, a stretched one fills it, a fixed one scrolls only when it must. */
+main {
+  width: auto;
+  max-width: none;
+  margin-right: var(--side-space);
+  margin-left: 0;
+}
+
+.side {
+  position: fixed;
+  z-index: 15;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  pointer-events: none;
+}
+
+.side > * {
+  pointer-events: auto;
+}
+
+.side-tabs {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: var(--side-tabs);
+  padding-top: 5rem;
+}
+
+.side-tab {
+  padding: 0.875rem 0;
+  border: 1px solid var(--page-border);
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  background: var(--page-panel);
+  color: var(--page-fg);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  writing-mode: vertical-rl;
+  cursor: pointer;
+}
+
+.side-tab:hover {
+  background: var(--page-border);
+}
+
+.side-tab[aria-expanded='true'] {
+  border-color: var(--bar-bg);
+  background: var(--bar-bg);
+  color: var(--bar-fg);
+}
+
+.side-tab:focus-visible {
+  outline: 2px solid var(--page-fg);
+  outline-offset: -3px;
+}
+
+.side-panels {
+  display: flex;
+  height: 100%;
+}
+
+/* Each panel fills the height of the window below the bar, against the tabs. */
+.side-panels > aside {
+  box-sizing: border-box;
+  height: 100%;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  box-shadow: -8px 0 24px rgb(0 0 0 / 0.12);
+  animation: side-out 160ms ease-out;
+}
+
+@keyframes side-out {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side-panels > aside {
+    animation: none;
+  }
+}
+
+/* Narrow windows: the open panel lies over the screen, which keeps its width. */
+@media (max-width: 720px) {
+  :root[data-side] {
+    --side-space: var(--side-tabs);
+  }
+
+  .side-panels > aside {
+    max-width: calc(100vw - var(--side-tabs) - 16px);
+  }
+}
+
+/* Offers of shared sessions keep clear of the side, too. */
+.invites {
+  right: calc(var(--side-space) + 1rem);
+}
+
+/* While a macro is recorded, the Macros tab carries a red dot. */
+:root[data-recording] .side-tab[data-side='macros']::before {
+  content: '●';
+  margin-bottom: 0.25rem;
+  color: #e5484d;
+}

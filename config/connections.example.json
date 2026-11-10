@@ -1,0 +1,38 @@
+{
+  // Copy to config/connections.json (gitignored) and fill in real host names, or pass the
+  // same JSON in Seed__ConnectionsJson. Connections are added on start when their name isn't
+  // in the database yet; after that, administrators manage them in the admin UI.
+  "connections": [
+    {
+      // Lowercase letters, digits and dashes: what URLs and the API use.
+      "name": "test",
+      "label": "Test system",
+      // tcp:// is plain Telnet (default port 23): test systems without TLS only.
+      "url": "tcp://ibmi-test.example.com:23",
+      // Most host sessions one user may have open on this system at once (1 to 9).
+      "maxSessionsPerUser": 3,
+      // Automated sign-on tests may run here. Never true for production.
+      "isTest": true,
+      // The system's colour on the page (#rrggbb), so it is easy to tell apart; users may
+      // choose their own. Optional.
+      "color": "#c98a1b",
+      // Entra ID groups and people allowed to use it. None: administrators only. A group by its
+      // exact display name, a person by UPN: they are looked up in Entra ID when the connection
+      // is first added. If two groups share a name, give that one's object ID as "id" instead.
+      "access": [
+        { "type": "group", "name": "IBM i developers" },
+        { "type": "user", "name": "someone@example.com" }
+      ]
+    },
+    {
+      "name": "prod",
+      "label": "Production",
+      // tls:// is Telnet over TLS (default port 992), verified against Relay__CaPem or
+      // Relay__CaFile; with neither set, any certificate is accepted (unverified).
+      "url": "tls://ibmi.example.com:992",
+      "maxSessionsPerUser": 3,
+      // By object ID instead: { "type": "group", "id": "<object ID>", "name": "IBM i users" }
+      "access": [{ "type": "group", "name": "IBM i users" }]
+    }
+  ]
+}

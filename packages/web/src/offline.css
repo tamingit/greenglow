@@ -1,0 +1,618 @@
+/* The overlay while no session shows a screen (offline.ts). It sits inside the terminal, so
+   it takes the look's tokens and shows in full screen. The last screen blurs under a tint
+   with faint scan lines; before any screen, a sign-on silhouette stands in. It fades in
+   with the blur rising, and out faster. */
+
+.terminal .offline {
+  --offline-ink: var(--term-white);
+  --offline-muted: var(--term-status);
+  --offline-tone: var(--term-status);
+  --offline-accent: var(--gh-accent, var(--term-green));
+  --offline-on-accent: var(--gh-on-accent, var(--term-bg));
+  --offline-card: var(--gh-card, color-mix(in srgb, var(--term-green) 6%, var(--term-bg)));
+  --offline-card-border: var(
+    --gh-card-border,
+    color-mix(in srgb, var(--term-green) 28%, var(--term-bg))
+  );
+  --offline-card-shadow: var(
+    --gh-card-shadow,
+    0 0 0 1px rgb(0 0 0 / 40%),
+    0 18px 48px rgb(0 0 0 / 60%)
+  );
+
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: inherit;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 3px,
+      color-mix(in srgb, var(--term-green) 5%, transparent) 3px 4px
+    ),
+    radial-gradient(
+      ellipse at center,
+      transparent 35%,
+      color-mix(in srgb, var(--term-bg) 70%, transparent)
+    ),
+    color-mix(in srgb, var(--term-bg) 45%, transparent);
+  backdrop-filter: blur(6px) saturate(0.6);
+  font-family: var(--term-status-font, var(--term-font));
+  line-height: 1.45;
+  cursor: default;
+  opacity: 1;
+  transition:
+    opacity 320ms ease-out,
+    backdrop-filter 320ms ease-out,
+    display 320ms allow-discrete;
+}
+
+.terminal .offline[hidden] {
+  display: none;
+  opacity: 0;
+  backdrop-filter: blur(0) saturate(1);
+  transition:
+    opacity 180ms ease-in,
+    backdrop-filter 180ms ease-in,
+    display 180ms allow-discrete;
+}
+
+@starting-style {
+  .terminal .offline {
+    opacity: 0;
+    backdrop-filter: blur(0) saturate(1);
+  }
+}
+
+/* A soft band rolls down the glass, like a monitor waiting for a signal. */
+.terminal .offline::after {
+  content: '';
+  position: absolute;
+  inset: -20% 0 auto;
+  height: 20%;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--term-green) 7%, transparent),
+    transparent
+  );
+  pointer-events: none;
+  animation: offline-scan 7s linear infinite;
+}
+
+.terminal .offline[data-error='true'] {
+  --offline-tone: var(--term-red);
+}
+
+.terminal .offline[data-state='connecting'] {
+  --offline-tone: var(--gh-focus, var(--term-green));
+}
+
+.terminal .offline[data-state='confirm'] {
+  --offline-tone: var(--term-yellow);
+}
+
+/* The silhouette: bars for text and boxes for fields on the 80×24 grid. */
+.terminal .offline-ghost {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  display: none;
+  width: calc(var(--cell-width, 8px) * 80);
+  height: calc(var(--row-height) * 24);
+  translate: -50% 0;
+  opacity: 0.5;
+  filter: blur(2px);
+}
+
+.terminal .offline.blank .offline-ghost {
+  display: block;
+}
+
+.terminal .offline-ghost span {
+  position: absolute;
+  top: calc((var(--r) + 0.32) * var(--row-height));
+  left: calc(var(--c) * var(--cell-width, 8px));
+  width: calc(var(--w) * var(--cell-width, 8px));
+  height: calc(var(--row-height) * 0.36);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--term-green) 55%, transparent);
+}
+
+.terminal .offline-ghost .field {
+  top: calc((var(--r) + 0.14) * var(--row-height));
+  height: calc(var(--row-height) * 0.72);
+  border-bottom: 2px solid var(--term-green);
+  border-radius: 0;
+  background: transparent;
+}
+
+.terminal.greenglow .offline-ghost .field {
+  box-sizing: border-box;
+  border: 1px solid var(--gh-field-border);
+  border-radius: 4px;
+  background: var(--gh-field);
+}
+
+.terminal .offline-card {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  max-width: min(27rem, calc(100% - 2rem));
+  padding: 1.5rem 2rem;
+  border: 1px solid var(--offline-card-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--offline-card) 94%, transparent);
+  box-shadow: var(--offline-card-shadow);
+  text-align: center;
+}
+
+.terminal .offline.enter .offline-card {
+  animation: offline-rise 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.terminal .offline-icon {
+  display: grid;
+  place-items: center;
+  width: 3.5rem;
+  height: 3.5rem;
+  margin-bottom: 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--offline-tone) 45%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--offline-tone) 12%, transparent);
+  color: var(--offline-tone);
+}
+
+.terminal .offline-icon svg {
+  width: 2.25rem;
+  height: 2.25rem;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Apart while disconnected: the halves part once as the overlay comes up. */
+.terminal .offline .plug {
+  transform: translateX(-1.5px);
+}
+
+.terminal .offline .socket {
+  transform: translateX(1.5px);
+}
+
+.terminal .offline.enter[data-state='disconnected'] .plug {
+  animation: offline-unplug 480ms 120ms cubic-bezier(0.3, 0.7, 0.2, 1) backwards;
+}
+
+.terminal .offline.enter[data-state='disconnected'] .socket {
+  animation: offline-unplug-socket 480ms 120ms cubic-bezier(0.3, 0.7, 0.2, 1) backwards;
+}
+
+.terminal .offline.enter[data-state='disconnected'] .spark {
+  animation: offline-spark 480ms 200ms ease-out backwards;
+}
+
+/* Together, again and again, while connecting. */
+.terminal .offline[data-state='connecting'] .plug {
+  animation: offline-plug-in 1.4s ease-in-out infinite;
+}
+
+.terminal .offline[data-state='connecting'] .socket {
+  animation: offline-socket-in 1.4s ease-in-out infinite;
+}
+
+.terminal .offline[data-state='connecting'] .spark {
+  opacity: 0;
+}
+
+/* Still plugged in while asking. */
+.terminal .offline[data-state='confirm'] .plug {
+  transform: translateX(1px);
+}
+
+.terminal .offline[data-state='confirm'] .socket {
+  transform: translateX(-1px);
+}
+
+.terminal .offline[data-state='confirm'] .spark {
+  opacity: 0;
+}
+
+.terminal .offline-title {
+  margin: 0;
+  color: var(--offline-ink);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-wrap: balance;
+}
+
+/* Classic glows a little, like phosphor. */
+.terminal.classic .offline-title {
+  text-shadow: 0 0 12px color-mix(in srgb, var(--term-green) 45%, transparent);
+}
+
+.terminal .offline-detail {
+  max-width: 38ch;
+  margin: 0;
+  color: var(--offline-muted);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.terminal .offline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
+.terminal .offline-actions button {
+  min-height: 2.5rem;
+  padding: 0 1.25rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    filter 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.terminal .offline-actions button[hidden] {
+  display: none;
+}
+
+.terminal .offline-action {
+  background: var(--offline-accent);
+  color: var(--offline-on-accent);
+}
+
+.terminal .offline-end {
+  border-color: var(--term-red);
+  background: transparent;
+  color: var(--term-red);
+}
+
+.terminal .offline-end:hover {
+  background: color-mix(in srgb, var(--term-red) 12%, transparent);
+}
+
+.terminal .offline-stay {
+  border-color: var(--offline-card-border);
+  background: transparent;
+  color: var(--offline-ink);
+}
+
+.terminal .offline-stay:hover {
+  background: color-mix(in srgb, var(--offline-ink) 8%, transparent);
+}
+
+.terminal .offline-action:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.terminal.classic .offline-action:hover:not(:disabled) {
+  box-shadow: 0 0 16px color-mix(in srgb, var(--term-green) 50%, transparent);
+}
+
+.terminal .offline-actions button:focus-visible {
+  outline: 2px solid var(--term-focus);
+  outline-offset: 3px;
+}
+
+.terminal .offline-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes offline-scan {
+  to {
+    translate: 0 600%;
+  }
+}
+
+@keyframes offline-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+@keyframes offline-unplug {
+  from {
+    transform: translateX(1px);
+  }
+}
+
+@keyframes offline-unplug-socket {
+  from {
+    transform: translateX(-1px);
+  }
+}
+
+@keyframes offline-spark {
+  from {
+    opacity: 0;
+    transform: translateY(1.5px);
+  }
+}
+
+@keyframes offline-plug-in {
+  50% {
+    transform: translateX(1px);
+  }
+}
+
+@keyframes offline-socket-in {
+  50% {
+    transform: translateX(-1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal .offline,
+  .terminal .offline[hidden],
+  .terminal .offline-actions button {
+    transition: none;
+  }
+
+  .terminal .offline::after {
+    display: none;
+  }
+
+  .terminal .offline.enter .offline-card,
+  .terminal .offline.enter[data-state='disconnected'] .plug,
+  .terminal .offline.enter[data-state='disconnected'] .socket,
+  .terminal .offline.enter[data-state='disconnected'] .spark,
+  .terminal .offline[data-state='connecting'] .plug,
+  .terminal .offline[data-state='connecting'] .socket {
+    animation: none;
+  }
+}
+
+/* The systems to choose from, a tile each, when the user may use more than one. The card
+   grows to hold them, so the choice is the first thing on the page. */
+.terminal .offline.with-choices .offline-card {
+  width: min(44rem, calc(100% - 2rem));
+  max-width: none;
+  padding: 2rem;
+}
+
+.terminal .offline.with-choices .offline-actions {
+  display: none;
+}
+
+.terminal .offline.with-choices .offline-title {
+  font-size: 1.5rem;
+}
+
+.terminal .offline-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 0.75rem;
+  /* Room for the focus ring, which the scrolling box would clip. */
+  box-sizing: border-box;
+  width: calc(100% + 1rem);
+  max-height: 45vh;
+  margin: 0.75rem -0.5rem 0;
+  padding: 0.5rem;
+  overflow: auto;
+}
+
+.terminal .offline-choices[hidden] {
+  display: none;
+}
+
+.terminal .offline-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+  min-height: 5.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--offline-card-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--offline-ink) 4%, transparent);
+  color: var(--offline-ink);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.terminal .offline-choice:hover {
+  border-color: var(--offline-accent);
+  background: color-mix(in srgb, var(--offline-accent) 12%, transparent);
+}
+
+/* The system chosen last: Enter connects to it again. */
+.terminal .offline-choice.chosen {
+  border-color: var(--offline-accent);
+  box-shadow: 0 0 0 1px var(--offline-accent);
+}
+
+/* The system's colour, a band down the tile's edge. */
+.terminal .offline-choice[data-colored] {
+  border-left: 6px solid var(--system-color);
+}
+
+.terminal .offline-choice:focus-visible {
+  outline: 2px solid var(--term-focus);
+  outline-offset: 3px;
+}
+
+.terminal .offline-choice-label {
+  font-size: 1.05rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.terminal .offline-choice-security {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--offline-muted) 45%, transparent);
+  border-radius: 999px;
+  color: var(--offline-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.terminal .offline-choice-security:not([data-security='tls']) {
+  border-color: color-mix(in srgb, var(--term-yellow) 60%, transparent);
+  color: var(--term-yellow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal .offline-choice {
+    transition: none;
+  }
+}
+
+/* The sessions to go back to, on the Disconnected card. */
+.terminal .offline.with-lobby .offline-card {
+  max-width: min(52rem, calc(100% - 2rem));
+}
+
+.terminal .offline.with-choices.with-lobby .offline-card {
+  width: min(52rem, calc(100% - 2rem));
+}
+
+.terminal .offline-lobby {
+  width: 100%;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.terminal .lobby-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: system-ui, sans-serif;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.terminal .lobby-table caption {
+  padding-bottom: 0.4rem;
+  color: var(--offline-ink);
+  font-weight: 600;
+  text-align: left;
+}
+
+.terminal .lobby-table th {
+  padding: 0.3rem 0.5rem;
+  border-bottom: 1px solid var(--offline-card-border);
+  color: var(--offline-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.terminal .lobby-table td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--offline-card-border) 50%, transparent);
+  color: var(--offline-ink);
+  overflow-wrap: break-word;
+}
+
+/* A long screen title wraps between words; the other columns keep their width. */
+.terminal .lobby-table .lobby-screen {
+  min-width: 8rem;
+}
+
+.terminal .lobby-table .lobby-opened {
+  white-space: nowrap;
+}
+
+.terminal .lobby-count {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.terminal .lobby-table .lobby-actions {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.terminal .lobby-buttons {
+  display: flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.terminal .lobby-actions button,
+.terminal .lobby-foot button {
+  padding: 0.25rem 0.7rem;
+  border: 1px solid var(--offline-accent);
+  border-radius: 6px;
+  background: var(--offline-accent);
+  color: var(--offline-on-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.terminal .lobby-actions .lobby-end {
+  border-color: var(--term-red);
+  background: transparent;
+  color: var(--term-red);
+}
+
+.terminal .lobby-actions button:disabled,
+.terminal .lobby-foot button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.terminal .lobby-actions button:focus-visible,
+.terminal .lobby-foot button:focus-visible,
+.terminal .lobby-pick input:focus-visible {
+  outline: 2px solid var(--term-focus);
+  outline-offset: 2px;
+}
+
+/* Several sessions: a checkbox each, and Join selected under the list. */
+.terminal .lobby-table .lobby-pick {
+  width: 1.5rem;
+  padding-right: 0;
+}
+
+.terminal .lobby-pick input {
+  margin: 0;
+  accent-color: var(--offline-accent);
+  cursor: pointer;
+}
+
+.terminal .lobby-pick input:disabled {
+  cursor: default;
+}
+
+.terminal .lobby-table .lobby-foot {
+  padding-top: 0.6rem;
+  border-bottom: 0;
+  text-align: right;
+}
+
+/* A tab with no screen yet: only the silhouette shows under the card, not another tab's
+   screen. */
+.terminal.no-screen > :not(.offline) {
+  visibility: hidden;
+}

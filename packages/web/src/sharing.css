@@ -1,0 +1,305 @@
+/* The sharing panel, one of the side panels (side.css). */
+
+.workspace {
+  display: flex;
+  flex: 1;
+  gap: 0.75rem;
+  min-height: 0;
+}
+
+.workspace > #stage {
+  min-width: 0;
+}
+
+.sharing-panel {
+  --sharing-on: #2fa75a;
+  --sharing-near: #d9a520;
+  --sharing-view: #c4682a;
+
+  box-sizing: border-box;
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: 18rem;
+  overflow: auto;
+  border: 1px solid var(--page-border);
+  border-radius: 8px;
+  background: var(--page-panel);
+  color: var(--page-fg);
+  font-size: 0.875rem;
+}
+
+.sharing-panel[hidden] {
+  display: none;
+}
+
+.sharing-head {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.625rem 0.5rem 0.5rem 0.875rem;
+}
+
+.sharing-head h2,
+.sharing-panel h3 {
+  margin: 0;
+  color: var(--page-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sharing-head h2 {
+  flex: 1;
+}
+
+.sharing-live {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  color: var(--page-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.sharing-live::before {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #e5484d;
+  content: '';
+}
+
+.sharing-live[hidden] {
+  display: none;
+}
+
+.sharing-close,
+.sharing-x,
+.sharing-add {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--page-muted);
+  font: inherit;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sharing-add {
+  border-color: var(--page-border);
+}
+
+.sharing-close:hover,
+.sharing-x:hover,
+.sharing-add:hover {
+  background: var(--page-border);
+  color: var(--page-fg);
+}
+
+.sharing-section {
+  padding: 0.75rem 0.875rem;
+  border-top: 1px solid var(--page-border);
+}
+
+.sharing-section[hidden] {
+  display: none;
+}
+
+.sharing-keyboard {
+  border-top: 0;
+  padding-top: 0.25rem;
+}
+
+.sharing-control {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.5rem;
+  margin-bottom: 0.5rem;
+  border: 0;
+  border-radius: 8px;
+  background: #2f6fe0;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sharing-control:hover {
+  background: #2560c8;
+}
+
+.sharing-control[hidden] {
+  display: none;
+}
+
+.sharing-holder,
+.sharing-status {
+  margin: 0;
+  color: var(--page-muted);
+}
+
+.sharing-status {
+  padding: 0 0.875rem 0.75rem;
+}
+
+.sharing-status:empty {
+  display: none;
+}
+
+.sharing-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.375rem;
+}
+
+.sharing-count {
+  color: var(--page-fg);
+}
+
+.sharing-yours h3 {
+  margin-bottom: 0.375rem;
+}
+
+.sharing-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sharing-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  min-height: 2.75rem;
+  border-bottom: 1px solid var(--page-border);
+}
+
+.sharing-row:last-child {
+  border-bottom: 0;
+}
+
+.sharing-row[data-state='off'] .sharing-name {
+  color: var(--page-muted);
+}
+
+.sharing-empty {
+  padding: 0.375rem 0;
+  color: var(--page-muted);
+}
+
+.sharing-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sharing-detail {
+  color: var(--page-muted);
+  font-size: 0.75rem;
+}
+
+/* Green: watching now, or open in this window. Yellow: in GreenGlow, not watching.
+   Hollow: not in GreenGlow, or not open here. */
+.sharing-light {
+  box-sizing: border-box;
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 1.5px solid var(--page-muted);
+  border-radius: 50%;
+}
+
+.sharing-light[data-state='on'] {
+  border-color: var(--sharing-on);
+  background: var(--sharing-on);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sharing-on) 25%, transparent);
+}
+
+.sharing-light[data-state='near'] {
+  border-color: var(--sharing-near);
+  background: var(--sharing-near);
+}
+
+.sharing-key {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  align-items: center;
+  width: 2.25rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--page-fg);
+  cursor: pointer;
+}
+
+.sharing-key[data-state='keyboard'] {
+  border-color: var(--sharing-on);
+  background: color-mix(in srgb, var(--sharing-on) 18%, transparent);
+  color: var(--sharing-on);
+}
+
+.sharing-key[data-state='view'] {
+  border-color: var(--sharing-view);
+  background: color-mix(in srgb, var(--sharing-view) 16%, transparent);
+  color: var(--sharing-view);
+}
+
+.sharing-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
+
+.sharing-btn {
+  flex: none;
+  min-height: 2rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--page-fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sharing-btn:hover,
+.sharing-key:hover {
+  background: var(--page-border);
+}
+
+.sharing-panel button:focus-visible {
+  outline: 2px solid var(--page-fg);
+  outline-offset: 1px;
+}
+
+/* In the read-only list someone it is shared with sees: the access, not a button. */
+.sharing-key-shown {
+  cursor: default;
+}
+
+.sharing-add[hidden] {
+  display: none;
+}

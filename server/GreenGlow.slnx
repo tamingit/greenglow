@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GreenGlow.Engine/GreenGlow.Engine.csproj" />
+    <Project Path="src/GreenGlow.Server/GreenGlow.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GreenGlow.Engine.Tests/GreenGlow.Engine.Tests.csproj" />
+    <Project Path="tests/GreenGlow.FakeHost.Tests/GreenGlow.FakeHost.Tests.csproj" />
+    <Project Path="tests/GreenGlow.FakeHost/GreenGlow.FakeHost.csproj" />
+    <Project Path="tests/GreenGlow.Server.Tests/GreenGlow.Server.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/GreenGlow.Tools/GreenGlow.Tools.csproj" />
+  </Folder>
+</Solution>

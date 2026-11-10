@@ -1,0 +1,14 @@
+{
+  "profiles": {
+    "dev": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5080",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Server__AllowedOrigins__0": "http://localhost:5173",
+        "Auth__DevLogin": "true"
+      }
+    }
+  }
+}

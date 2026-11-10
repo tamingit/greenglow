@@ -1,0 +1,662 @@
+:root {
+  color-scheme: light dark;
+  --page-bg: #f7f8f5;
+  --page-fg: #1d2319;
+  --page-muted: #5b6655;
+  --page-panel: #ffffff;
+  --page-border: #d5dbcf;
+
+  /* The top bar is forest green in every look; Night Shift dims it. */
+  --bar-bg: #1d4d2c;
+  --bar-edge: #143b21;
+  --bar-fg: #ffffff;
+  --bar-muted: #c2dac8;
+  --bar-control: rgb(255 255 255 / 0.08);
+  --bar-control-hover: rgb(255 255 255 / 0.16);
+  --bar-line: rgb(255 255 255 / 0.22);
+  --bar-primary: #8fe0a6;
+  --bar-primary-hover: #a9ebbb;
+  --bar-on-primary: #0c2a16;
+  --bar-panel: #173f24;
+  --bar-focus: #f5d76e;
+  --dot-idle: #9db5a4;
+  --dot-busy: #f5c451;
+  --dot-ok: #7ee69c;
+  --dot-warn: #f5c451;
+  --dot-error: #ff8f87;
+  --badge-warn-bg: #f5c451;
+  --badge-warn-fg: #3a2a00;
+
+  font-family: system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg: #141712;
+    --page-fg: #e3e8dd;
+    --page-muted: #9aa592;
+    --page-panel: #1c2019;
+    --page-border: #333a2e;
+  }
+}
+
+/* GreenGlow and Night Shift set the page's light or dark chrome; Classic follows the
+   system setting. */
+:root[data-look='greenglow'] {
+  color-scheme: light;
+  --page-bg: #cddbca;
+  --page-fg: #15201a;
+  --page-muted: #4a5a50;
+  --page-panel: #e6eee3;
+  --page-border: #b5c6b3;
+}
+
+:root[data-look='night-shift'] {
+  color-scheme: dark;
+  --page-bg: #0e1310;
+  --page-fg: #e3eae5;
+  --page-muted: #97a89e;
+  --page-panel: #151c18;
+  --page-border: #2a352f;
+  --bar-bg: #12301c;
+  --bar-edge: #0a1f11;
+  --bar-panel: #10291a;
+  --bar-primary: #6fcf8a;
+  --bar-primary-hover: #86dba0;
+}
+
+/* The page is one window tall: the bar, then the stage, which takes the height the bar
+   and notices leave. The renderer fits the screen to the stage, so it refits when the
+   bar wraps or a notice appears. */
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  margin: 0;
+  background: var(--page-bg);
+  color: var(--page-fg);
+}
+
+main {
+  box-sizing: border-box;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  max-width: 96rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+#stage {
+  flex: 1;
+  min-height: 0;
+}
+
+/* A fixed-size screen is as wide as its columns, whatever the space, centred in it, and the
+   stage scrolls when it is bigger. */
+#stage[data-size='fixed'] {
+  overflow: auto;
+}
+
+#stage[data-size='fixed'] > .terminal {
+  box-sizing: content-box;
+  width: calc(var(--cell-width) * var(--columns));
+  margin: 0 auto;
+}
+
+/* The top bar: one row, 40px, at any window width. It never wraps; as the window
+   narrows, the name, badge text, status text, button text and Full screen icon drop out
+   in that order, while the target, the Connect or Disconnect button, the status dot and
+   the menu stay. The menu always has the full status, the look and Full screen. */
+
+.app-bar {
+  flex: none;
+  color-scheme: dark;
+  background: var(--bar-bg);
+  border-bottom: 1px solid var(--bar-edge);
+  color: var(--bar-fg);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 0.8125rem;
+}
+
+/* The current system's colour, a band along the bottom of the bar. */
+.app-bar[data-colored] {
+  box-shadow: inset 0 -3px 0 var(--system-color);
+}
+
+.bar-inner {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.625rem;
+  align-items: center;
+  max-width: 96rem;
+  height: 2.5rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Visually hidden, still read by screen readers. */
+.bar-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.bar-brand {
+  display: flex;
+  flex: none;
+  gap: 0.5rem;
+  align-items: center;
+  padding-right: 0.75rem;
+  border-right: 1px solid var(--bar-line);
+}
+
+.bar-brand-mark {
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.app-bar h1 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bar-icon {
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Buttons and the target picker share one height and focus ring. */
+.app-bar .bar-btn,
+.app-bar select {
+  box-sizing: border-box;
+  height: 1.75rem;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.app-bar .bar-btn {
+  display: inline-flex;
+  flex: none;
+  gap: 0.375rem;
+  align-items: center;
+  padding: 0 0.625rem;
+  border: 1px solid var(--bar-line);
+  background: var(--bar-control);
+  color: var(--bar-fg);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease;
+}
+
+.app-bar .bar-btn-icon {
+  justify-content: center;
+  width: 1.75rem;
+  padding: 0;
+}
+
+.app-bar .bar-btn:hover:not(:disabled) {
+  background: var(--bar-control-hover);
+}
+
+.app-bar .bar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.app-bar :focus-visible,
+.bar-segmented input:focus-visible + label {
+  outline: 2px solid var(--bar-focus);
+  outline-offset: 2px;
+}
+
+/* The status takes the room left, on one line; a long message ends in an ellipsis, shows
+   in full on hover, and is always whole in the menu. */
+.bar-status {
+  display: flex;
+  flex: 1 1 0;
+  gap: 0.5rem;
+  align-items: center;
+  min-width: 0.625rem;
+  color: var(--bar-fg);
+}
+
+.bar-status-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-status-dot {
+  flex: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: var(--dot-idle);
+}
+
+[data-state='busy'] > .bar-status-dot {
+  background: var(--dot-busy);
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+[data-state='ok'] > .bar-status-dot {
+  background: var(--dot-ok);
+  box-shadow: 0 0 0 3px rgb(126 230 156 / 0.25);
+}
+
+[data-state='warn'] > .bar-status-dot {
+  background: var(--dot-warn);
+}
+
+[data-state='error'] > .bar-status-dot {
+  background: var(--dot-error);
+}
+
+@keyframes status-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-state='busy'] > .bar-status-dot {
+    animation: none;
+  }
+
+  .app-bar .bar-btn,
+  .bar-segmented label {
+    transition: none;
+  }
+}
+
+/* The menu. */
+.bar-menu {
+  position: relative;
+  flex: none;
+}
+
+.bar-menu summary {
+  position: relative;
+  list-style: none;
+}
+
+.bar-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.bar-menu[open] summary {
+  background: var(--bar-control-hover);
+}
+
+.bar-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  right: 0;
+  z-index: 20;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 18rem;
+  max-width: calc(100vw - 1rem);
+  /* Below the 2.5rem bar with a little room under it: a short window scrolls the menu. */
+  max-height: calc(100dvh - 3.5rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem;
+  border: 1px solid var(--bar-line);
+  border-radius: 8px;
+  background: var(--bar-panel);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+}
+
+/* Scroll the menu, never squeeze its rows. */
+.bar-menu-panel > * {
+  flex-shrink: 0;
+}
+
+.bar-menu-user {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--bar-line);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.bar-menu-user-name {
+  font-weight: 600;
+}
+
+.bar-menu-user-upn {
+  color: var(--bar-muted);
+  font-size: 0.85em;
+}
+
+.bar-menu-form {
+  display: contents;
+}
+
+.bar-menu-status {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--bar-line);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.bar-menu-status .bar-status-dot {
+  transform: translateY(1px);
+}
+
+.bar-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.bar-menu-section[hidden] {
+  display: none;
+}
+
+.bar-menu-heading {
+  color: var(--bar-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+a.bar-menu-item {
+  text-decoration: none;
+}
+
+.bar-menu-item[hidden] {
+  display: none;
+}
+
+.bar-menu-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  height: 2rem;
+  padding: 0 0.5rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bar-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bar-menu-item:hover {
+  background: var(--bar-control-hover);
+}
+
+.bar-menu-foot {
+  margin: 0;
+  color: var(--bar-muted);
+  font-size: 0.75rem;
+}
+
+/* The look picker: one segment per look, radios underneath so arrows move between them. */
+.bar-segmented {
+  display: flex;
+  height: 2rem;
+  padding: 2px;
+  box-sizing: border-box;
+  border: 1px solid var(--bar-line);
+  border-radius: 6px;
+  background: var(--bar-control);
+}
+
+.bar-segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.bar-segmented label {
+  display: inline-flex;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  border-radius: 4px;
+  color: var(--bar-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+}
+
+.bar-segmented label:hover {
+  color: var(--bar-fg);
+}
+
+.bar-segmented input:checked + label {
+  background: var(--bar-fg);
+  color: var(--bar-bg);
+  font-weight: 600;
+}
+
+/* The font size for a fixed-size screen, under the Screen size choice. */
+.bar-font-size {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bar-font-size[hidden] {
+  display: none;
+}
+
+.bar-font-size select {
+  padding: 0 0.375rem;
+  border: 1px solid var(--bar-line);
+  background: var(--bar-control);
+  color: var(--bar-fg);
+  cursor: pointer;
+}
+
+.bar-color {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.bar-color input {
+  width: 2.75rem;
+  height: 2rem;
+  padding: 0.125rem;
+  border: 1px solid var(--bar-edge);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.bar-color .bar-btn[hidden] {
+  display: none;
+}
+
+/* Narrower windows: shed words, never height. */
+@media (max-width: 40rem) {
+  .bar-inner {
+    gap: 0.5rem;
+    padding: 0 0.5rem;
+  }
+
+  .bar-status-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .app-bar .bar-fullscreen {
+    display: none;
+  }
+}
+
+#terminal:fullscreen {
+  border-radius: 0;
+  padding: 1rem;
+}
+
+#terminal:fullscreen[data-size='fixed'] {
+  overflow: auto;
+}
+
+/* The session log: hidden unless opened from the menu, then docked under the screen,
+   which refits smaller above it. */
+.log-panel {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  max-height: 30vh;
+  margin-top: 0.75rem;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: var(--page-panel);
+  color: var(--page-muted);
+}
+
+.log-panel[hidden] {
+  display: none;
+}
+
+.log-head {
+  display: flex;
+  flex: none;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0.375rem 0.25rem 0.75rem;
+  border-bottom: 1px solid var(--page-border);
+}
+
+.log-head h2 {
+  margin: 0;
+  color: var(--page-fg);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.log-close {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--page-muted);
+  cursor: pointer;
+}
+
+.log-close:hover {
+  background: var(--page-border);
+  color: var(--page-fg);
+}
+
+.log-close:focus-visible {
+  outline: 2px solid var(--page-fg);
+  outline-offset: 1px;
+}
+
+#log {
+  min-height: 3rem;
+  margin: 0;
+  padding: 0.5rem 0.75rem 0.5rem 2.5rem;
+  overflow: auto;
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.8125rem;
+}
+
+.notice {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--page-border);
+  border-left: 4px solid #c58b00;
+  border-radius: 6px;
+  background: var(--page-panel);
+}
+
+/* The terminal's right-click menu (contextmenu.ts), placed by --menu-x and --menu-y. */
+.context-menu {
+  position: fixed;
+  z-index: 50;
+  top: var(--menu-y, 0);
+  left: var(--menu-x, 0);
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  padding: 0.25rem;
+  border: 1px solid var(--page-border);
+  border-radius: 8px;
+  background: var(--page-panel);
+  color: var(--page-fg);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.25);
+  font-family: system-ui, sans-serif;
+  font-size: 0.9rem;
+}
+
+.context-menu[hidden] {
+  display: none;
+}
+
+.context-menu-item {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu-item:hover:not(:disabled),
+.context-menu-item:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--page-fg) 9%, transparent);
+}
+
+.context-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.context-menu-item kbd {
+  color: var(--page-muted);
+  font-family: inherit;
+  font-size: 0.8em;
+}

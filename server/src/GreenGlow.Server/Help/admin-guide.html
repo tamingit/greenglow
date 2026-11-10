@@ -1,0 +1,289 @@
+<!-- The administrator guide: sent by GET /api/admin/guide to administrators only, and shown in
+     the help page (packages/web/help.html, #admin). Images are under /api/admin/guide/images/,
+     made with `npm run screenshots` from the fake IBM i. Section IDs start with admin-. -->
+<h1>GreenGlow Connect administrator guide</h1>
+<p class="help-lead">
+  Administrators decide who may connect to which IBM i system, set the session limits, and read the
+  connection log. Everything here is on the <strong>Administration</strong> page: choose it in the
+  terminal's menu (only administrators see it). Changes take effect at once, for everyone.
+</p>
+
+<section id="admin-connections">
+  <h2>Connections</h2>
+  <p>
+    A connection is one IBM i system people can open sessions on. The
+    <strong>Connections</strong> tab lists them as cards, with a card at the end to add one.
+  </p>
+  <figure>
+    <img src="/api/admin/guide/images/admin-connections.png" alt="The Connections tab" />
+    <figcaption>The Connections tab.</figcaption>
+  </figure>
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>What it is</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Name</td>
+        <td>
+          An internal name in lowercase letters, digits and dashes, such as <code>prod</code>. It
+          can't change later: sessions and the log refer to it. To rename, add a new connection.
+        </td>
+      </tr>
+      <tr>
+        <td>Label</td>
+        <td>What users see on tiles and tabs, up to 40 characters.</td>
+      </tr>
+      <tr>
+        <td>Address</td>
+        <td>
+          <code>tls://host:992</code> for Telnet over TLS, or <code>tcp://host:23</code> for plain
+          Telnet. Production is always <code>tls://</code>. Plain Telnet sends sign-on passwords
+          unencrypted, so use it only for a test system that offers no TLS; the server warns about
+          it when it starts.
+        </td>
+      </tr>
+      <tr>
+        <td>Sessions per user</td>
+        <td>
+          How many sessions one person may have open on it at once (1 to 9, default 3). The IBM i
+          allows three per user (QLMTDEVSSN), ACS included, so more rarely helps.
+        </td>
+      </tr>
+      <tr>
+        <td>Enabled</td>
+        <td>A disabled connection is hidden from everyone, administrators included.</td>
+      </tr>
+      <tr>
+        <td>Test system</td>
+        <td>Automated sign-on tests may run on it. Never tick it for production.</td>
+      </tr>
+      <tr>
+        <td>Colour</td>
+        <td>
+          Shown on the system's tiles and tabs, to tell systems apart. Users may choose their own
+          colour, which wins for them.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    <strong>Save</strong> keeps changes to a card. <strong>Delete</strong> removes the connection:
+    sessions already open on it carry on, and no new ones can start.
+  </p>
+  <p>Each card is tagged with what to look out for:</p>
+  <ul>
+    <li><em>not encrypted</em>: a <code>tcp://</code> address.</li>
+    <li><em>certificate not verified</em>: TLS, but no CA is trusted for it (see below).</li>
+    <li><em>test system</em>, <em>disabled</em>, and how many sessions are open now.</li>
+  </ul>
+
+  <h3 id="admin-access">Who may use it</h3>
+  <p>
+    Under <strong>Who may use it</strong>, add Entra ID groups (<strong>Add a group</strong>) or
+    people (<strong>Add a person</strong>). Anyone in one of the groups, or named, sees the system
+    and may open sessions on it. × takes access away.
+  </p>
+  <p>
+    <strong>A connection nobody has access to is for administrators only.</strong> Add a new system,
+    try it yourself, then give it to a group. Group membership is read from Entra ID and kept for
+    five minutes, so someone just added to a group may wait that long. If Entra ID can't be reached,
+    people who rely on a group are refused until it can.
+  </p>
+</section>
+
+<section id="admin-certificates">
+  <h2>Certificates</h2>
+  <p>
+    For a <code>tls://</code> connection GreenGlow checks the IBM i's certificate against the CA the
+    server was given (<code>Relay__CaPem</code>), and against a CA you trust for that connection on
+    its card. With neither, the connection is still encrypted but the IBM i isn't verified: users
+    see a yellow lock and the card says <em>certificate not verified</em>.
+  </p>
+  <ol>
+    <li>
+      On the connection's card press <strong>Check certificate</strong>. GreenGlow connects and
+      shows the certificates the IBM i sent: who each is for, who issued it, when it expires and its
+      SHA-256 fingerprint. Compare the fingerprint with the one your IBM i administrator gives you.
+    </li>
+    <li>
+      Press <strong>Trust</strong> for its CA. If the IBM i doesn't send its root CA, paste the
+      root's PEM (from the Windows certificate store or your IBM i administrator) and press
+      <strong>Trust this CA</strong>.
+    </li>
+    <li>
+      If the certificate is for another name than the address, GreenGlow asks before accepting that
+      name. Connections then require exactly that name.
+    </li>
+  </ol>
+  <p>
+    <strong>Stop trusting</strong> removes it. Trusting and removing a CA are written to the
+    connection log.
+  </p>
+</section>
+
+<section id="admin-log">
+  <h2>Connection log</h2>
+  <p>
+    The <strong>Connection log</strong> tab records who connected, from which address, to which
+    system, and when. It holds metadata only: never what was on a screen or typed.
+  </p>
+  <figure>
+    <img src="/api/admin/guide/images/admin-log.png" alt="The Connection log tab" />
+    <figcaption>The Connection log tab.</figcaption>
+  </figure>
+  <ul>
+    <li>
+      Each host session is a row (<em>Host session</em>), and so is each browser that showed it
+      (<em>Browser</em>, with the person's role: owner, view-only or full access). Trusting or
+      removing a certificate is a row too.
+    </li>
+    <li>
+      Each printer output sign-on (<em>Printer output</em>) is a row with the IBM i user and how
+      many spooled files were opened, never which. A refused printer sign-on is a row that ends at
+      once and says why, such as <em>sign-on failed: wrong password</em>.
+    </li>
+    <li>Draining, resuming or resyncing a node (<em>Server node</em>) is a row with who asked.</li>
+    <li>
+      Rows still open are current: they show <em>current</em>, and a current host session shows its
+      IBM i user and screen title.
+    </li>
+    <li>
+      With more than one GreenGlow server, <strong>Node</strong> says which one wrote each row. Rows
+      from the other servers arrive within a minute, and their current sessions show without an IBM
+      i user or screen title.
+    </li>
+    <li>
+      <strong>Why it ended</strong> says how a session closed: signed off, lost, ended by its user,
+      and so on.
+    </li>
+  </ul>
+  <p>
+    <strong>Search</strong> finds a user, IP address, device or IBM i user.
+    <strong>Show</strong> picks the kind of row, <strong>From</strong> and <strong>To</strong> a
+    period, and <strong>Current only</strong> what is open now. The log shows 100 rows at a time:
+    <strong>Show older</strong> loads more. <strong>Download CSV</strong> saves the rows loaded so
+    far, so load what you need first.
+  </p>
+</section>
+
+<section id="admin-nodes">
+  <h2>Nodes</h2>
+  <p>
+    The <strong>Nodes</strong> tab lists each GreenGlow server (node) with its state, version and
+    open sessions: who, on which system, the device, the IBM i user, the screen, when it was opened,
+    how many browsers show it and since when it has had none. Servers share their connections,
+    users, shares, macros and settings, so a change made on one reaches the others within a second
+    or two. <strong>Refresh</strong> reads them again.
+  </p>
+  <ul>
+    <li>
+      <strong>Drain</strong> before restarting a server: it opens no new sessions (users opening one
+      are told to open it again, to use another server), and the sessions it has carry on until they
+      end. When they have, restart it. <strong>Resume</strong> undoes a drain; a restarted server is
+      always active again.
+    </li>
+    <li>
+      A session can't move to another server. A server that stops with sessions open ends them; the
+      IBM i keeps a signed-on user's job for 5 minutes, but the program they were in usually ends.
+    </li>
+    <li>
+      <strong>Resync from scratch</strong> replaces a server's connections, users, shares, macros
+      and settings with the other servers' copies, if it has gone wrong. Changes it made that no
+      other server has yet are lost. It is refused when no other server answers.
+    </li>
+    <li>
+      A server that can't be reached shows <em>unreachable</em> and why; one whose syncing fails
+      shows the last error.
+    </li>
+  </ul>
+</section>
+
+<section id="admin-admins">
+  <h2>Administrators</h2>
+  <figure>
+    <img src="/api/admin/guide/images/admin-admins.png" alt="The Administrators tab" />
+    <figcaption>The Administrators tab.</figcaption>
+  </figure>
+  <p>
+    Find someone under <strong>Add an administrator</strong> to make them one; they don't need to
+    have signed in yet. <strong>Remove</strong> takes it away, and <strong>Remove me</strong> your
+    own. The last administrator can't be removed. The <em>initial</em> administrator is set in the
+    server's configuration (<code>Entra__InitialAdminUpn</code>) and becomes one again whenever they
+    sign in.
+  </p>
+</section>
+
+<section id="admin-settings">
+  <h2>Settings</h2>
+  <p>
+    The session limits. Each starts at the server's configured default; a value saved here wins, and
+    <strong>Use the default</strong> goes back.
+  </p>
+  <figure>
+    <img src="/api/admin/guide/images/admin-settings.png" alt="The Settings tab" />
+    <figcaption>The Settings tab.</figcaption>
+  </figure>
+  <table>
+    <thead>
+      <tr>
+        <th>Setting</th>
+        <th>What it does</th>
+        <th>Default</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Browsers per session</td>
+        <td>
+          How many of its owner's own browsers may show one session at once. People it is shared
+          with don't count.
+        </td>
+        <td>2</td>
+      </tr>
+      <tr>
+        <td>Minutes kept with no browser</td>
+        <td>
+          How long a session stays open after its last browser leaves, so its user can come back to
+          it after a reload or a lost network. 0 ends it at once.
+        </td>
+        <td>5</td>
+      </tr>
+      <tr>
+        <td>Sessions on the server</td>
+        <td>
+          The most sessions open at once on each server, across everyone. A new session over it is
+          refused.
+        </td>
+        <td>50</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="admin-notes">
+  <h2>Good to know</h2>
+  <ul>
+    <li>
+      Every session runs on the GreenGlow server, so the IBM i sees the server's address, not the
+      user's PC. The connection log has each user's own address.
+    </li>
+    <li>
+      Device names are GG, the server's number and a session number, such as GG1002, reused as
+      sessions end, so GreenGlow adds few device descriptions on the IBM i. A user whose session
+      ended while signed on gets the same name back for 5 minutes, so the IBM i can offer to recover
+      their job.
+    </li>
+    <li>
+      Passwords typed on the sign-on screen pass through the server inside the session, and are
+      blanked before any screen leaves it: no browser, log or shared viewer ever gets one.
+    </li>
+    <li>
+      A user who can't see a system needs a grant on its card (or to be in a group that has one),
+      and the connection must be enabled.
+    </li>
+  </ul>
+</section>

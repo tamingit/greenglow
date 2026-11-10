@@ -1,0 +1,20 @@
+/* Classic: the look ACS gives a colour 5250 session. Colours to be checked side by side
+   with ACS. These are also the defaults every other look starts from. */
+
+.terminal {
+  --term-font: 'Cascadia Mono', Consolas, 'Lucida Console', ui-monospace, monospace;
+  --term-bg: #000000;
+  --term-green: #00ff00;
+  --term-white: #ffffff;
+  --term-red: #ff4040;
+  --term-turquoise: #00ffff;
+  --term-yellow: #ffff00;
+  --term-pink: #ff00ff;
+  --term-blue: #7890f0;
+  --term-cursor: var(--term-green);
+  --term-status: #a0a0a0;
+  --term-rule: #2a2a2a;
+  --term-message-rule: #1f2a1f;
+  --term-focus: #3b82f6;
+  --line-height: 1.3;
+}

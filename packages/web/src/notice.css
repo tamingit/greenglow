@@ -1,0 +1,72 @@
+/* A notice the user must dismiss (notice.ts). */
+
+.notice-dialog {
+  box-sizing: border-box;
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--page-border);
+  border-radius: 10px;
+  background: var(--page-panel);
+  color: var(--page-fg);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.35);
+  font-family: system-ui, sans-serif;
+}
+
+.notice-dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+
+.notice-dialog h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+}
+
+.notice-dialog p {
+  margin: 0 0 1rem;
+  overflow-wrap: anywhere;
+}
+
+.notice-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.notice-btn {
+  min-width: 5rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--bar-bg);
+  border-radius: 6px;
+  background: var(--bar-bg);
+  color: var(--bar-fg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notice-btn:focus-visible {
+  outline: 2px solid var(--bar-focus);
+  outline-offset: 2px;
+}
+
+/* A value a macro asks for (askValue). */
+.notice-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin: 0.5rem 0 1rem;
+}
+
+.notice-input {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: var(--page-bg);
+  color: var(--page-fg);
+  font: inherit;
+}
+
+.notice-btn-quiet {
+  margin-right: 0.5rem;
+  background: transparent;
+  color: var(--page-fg);
+}
