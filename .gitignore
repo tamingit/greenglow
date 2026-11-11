@@ -30,9 +30,12 @@ bin/
 obj/
 TestResults/
 
-# local SQLite database (npm run dev)
-server/src/GreenGlow.Server/data/
-data/
+# local SQLite database (npm run dev). Ignored by file type, not by a "data/" folder rule:
+# where letter case is ignored, that rule also hides the server's source folder Data/.
+*.db
+*.db-shm
+*.db-wal
+/data/
 
 # Playwright output
 test-results/
