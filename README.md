@@ -26,12 +26,10 @@ What users get:
 
 You need:
 
-- Windows with WSL2 (Ubuntu) and VS Code, or Linux or macOS
+- Linux or macOS
 - The .NET 10 SDK
 - Node 24 (install with [nvm](https://github.com/nvm-sh/nvm), which reads `.nvmrc`)
-- Docker Desktop with WSL integration, to run the container and the browser tests
-
-Clone inside the WSL filesystem (for example `~/repos`), not under `/mnt/c`, so file watching stays fast.
+- Docker, to run the container and the browser tests
 
 ```bash
 git clone <repository URL> greenglow-connect

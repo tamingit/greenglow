@@ -342,13 +342,10 @@ Recordings and test screens:
 ## Environment
 
 - **Development.**
-  - It works on Windows, natively or in WSL2, with the .NET 10 SDK and Node 24. Docker is needed only for the containers and for `npm run e2e`'s default browser.
+  - It works on Linux or macOS with the .NET 10 SDK and Node 24. Docker is needed only for the containers and for `npm run e2e`'s default browser.
   - Browsers accept plain `ws://` on `localhost`, so no local certificates are needed.
   - The Origin allowlist expects `localhost`, not `127.0.0.1`.
   - Locally you sign in with the dev login. To try Entra ID, set `Entra__*` in `.env` and register `http://localhost:5173/auth/callback` (or `:8080` for the container).
-- **Native Windows notes.**
-  - If Playwright's Chromium won't download, run the browser tests and `npm run icons` against an installed Chrome (`channel: 'chrome'`, `ICONS_BROWSER_CHANNEL=chrome`).
-  - `CertificateTrustTests.TheRootIsTrustedThroughTheIntermediatesTheIbmISends` fails on Windows. The pipeline runs on Linux, where it passes.
 - **Deployment.**
   - Publishing a GitHub release from main runs `.github/workflows/release.yml`: every check (`npm run ci` in `ci/Dockerfile`), then the image goes to `ghcr.io/tamingit/greenglow`. A `vX.Y.Z-beta[.N]` tag is tagged `:beta`, a `vX.Y.Z` tag `:prod`, and each also gets its version. Other tags, and commits not on main, are refused.
   - Nothing deploys automatically. The server runs the image with Docker Compose, deployed by hand (README, "Releases").
