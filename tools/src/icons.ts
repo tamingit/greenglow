@@ -4,9 +4,9 @@
 // packages/web/brand/ (icon.webp, logo.webp, transparent backgrounds) with headless Chromium:
 //   packages/web/public/icons/  icon-192.png, icon-512.png (transparent, for the manifest and
 //                               the page), icon-maskable-512.png and apple-touch-icon.png (on the
-//                               bar's green, full bleed), favicon-32.png
-//   packages/web/public/brand/  logo.png (for light backgrounds), logo-dark.png (its dark
-//                               "Connect" lightened, for dark ones)
+//                               icon's own dark green, full bleed), favicon-32.png
+//   packages/web/public/brand/  logo.png (white lettering outlined in dark green: reads on light
+//                               and dark backgrounds alike)
 // Run where Playwright's Chromium works, or with ICONS_BROWSER_CHANNEL=chrome to use an installed
 // Chrome.
 
@@ -19,8 +19,8 @@ const web = fileURLToPath(new URL('../../packages/web/', import.meta.url));
 const source = (name: string) =>
   'data:image/webp;base64,' + readFileSync(path.join(web, 'brand', name)).toString('base64');
 
-/** The bar's green: behind the icon where a platform wants no transparency. */
-const BACKGROUND = '#0f2a18';
+/** The icon's own dark green: behind it where a platform wants no transparency. */
+const BACKGROUND = '#021a05';
 
 interface Render {
   out: string;
@@ -30,8 +30,6 @@ interface Render {
   /** Of the square the artwork may fill (icon only). */
   fill?: number;
   background?: string;
-  /** Lighten the dark lettering (logo only). */
-  lighten?: boolean;
 }
 
 const renders: Render[] = [
@@ -46,10 +44,10 @@ const renders: Render[] = [
     fill: 0.72,
     background: BACKGROUND,
   },
-  // iOS draws its own rounded corners and shows transparency as black: full bleed.
-  { out: 'icons/apple-touch-icon.png', kind: 'icon', size: 180, fill: 0.8, background: BACKGROUND },
-  { out: 'brand/logo.png', kind: 'logo', size: 160 },
-  { out: 'brand/logo-dark.png', kind: 'logo', size: 160, lighten: true },
+  // iOS draws its own rounded corners and shows transparency as black: full bleed, the icon's
+  // rounded square filling it.
+  { out: 'icons/apple-touch-icon.png', kind: 'icon', size: 180, fill: 1, background: BACKGROUND },
+  { out: 'brand/logo.png', kind: 'logo', size: 240 },
 ];
 
 const browser = await chromium.launch({ channel: process.env.ICONS_BROWSER_CHANNEL || undefined });
@@ -94,20 +92,6 @@ for (const render of renders) {
         canvas.height = render.size;
         canvas.width = Math.round((w * render.size) / h);
         g.drawImage(image, left, top, w, h, 0, 0, canvas.width, canvas.height);
-        if (render.lighten) {
-          // Dark pixels right of "GreenGlow" are the "Connect" lettering (the green letters are
-          // bright): make them the page's light text.
-          const data = g.getImageData(0, 0, canvas.width, canvas.height);
-          const d = data.data;
-          for (let i = 0; i < d.length; i += 4) {
-            const [r, gr, b] = [d[i], d[i + 1], d[i + 2]];
-            const light = Math.max(r, gr, b);
-            if (light < 110 && (i / 4) % canvas.width > canvas.width * 0.66) {
-              [d[i], d[i + 1], d[i + 2]] = [227, 232, 221];
-            }
-          }
-          g.putImageData(data, 0, 0);
-        }
       }
       return canvas.toDataURL('image/png');
     },
