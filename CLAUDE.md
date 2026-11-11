@@ -162,7 +162,7 @@ ci/Dockerfile                   CI image: .NET 10, Node 24, Chromium
 Dockerfile                      the deployable image; the fakehost stage builds the fake IBM i's image
 compose.yaml                    local run of the deployable image
 compose.demo.yaml               the public demo: the server in demo mode and the fake IBM i
-bitbucket-pipelines.yml         build, test and deploy; its variables are listed at the end of the file
+.github/workflows/release.yml   a published GitHub release: every check, then the image to ghcr.io (beta or prod)
 test/fixtures/                  scrubbed or synthetic byte-stream recordings (committed; create when needed)
 test/recordings/                raw recordings (gitignored, never committed)
 ```
@@ -350,10 +350,8 @@ Recordings and test screens:
   - If Playwright's Chromium won't download, run the browser tests and `npm run icons` against an installed Chrome (`channel: 'chrome'`, `ICONS_BROWSER_CHANNEL=chrome`).
   - `CertificateTrustTests.TheRootIsTrustedThroughTheIntermediatesTheIbmISends` fails on Windows. The pipeline runs on Linux, where it passes.
 - **Deployment.**
-  - `bitbucket-pipelines.yml` runs on a self-hosted runner with Docker.
-    - Every branch runs Build & Test (`npm run ci` in `ci/Dockerfile`). `main` then deploys to production, and other branches deploy to the test instance.
-    - Every setting comes from a pipeline variable, listed at the end of the file.
-  - The repository is on GitHub, which has no Actions workflow yet.
+  - Publishing a GitHub release from main runs `.github/workflows/release.yml`: every check (`npm run ci` in `ci/Dockerfile`), then the image goes to `ghcr.io/tamingit/greenglow`. A `vX.Y.Z-beta[.N]` tag is tagged `:beta`, a `vX.Y.Z` tag `:prod`, and each also gets its version. Other tags, and commits not on main, are refused.
+  - Nothing deploys automatically. The server runs the image with Docker Compose, deployed by hand (README, "Releases").
   - The container runs read-only with no capabilities, on the `greenglow-data` volume. It is published on `127.0.0.1` for a TLS proxy on the same host.
 - **IBM i systems.**
   - Production is reached over Telnet TLS on 992. A test system may use plain Telnet on 23.

@@ -77,7 +77,90 @@ Settings use ASP.NET Core names (`Section__Key`) in the environment, and in deve
 - `Relay__CaFile` or `Relay__CaPem`: the CA for `tls://` connections.
 - `Sessions__MaxFrontends` (browsers per session, default 2), `Sessions__IdleMinutes` (default 5) and `Sessions__MaxConnections` (default 50): defaults that administrators can change on the admin page.
 
-The pipeline in `bitbucket-pipelines.yml` builds, tests and deploys the image from variables listed at the end of that file.
+## Releases
+
+Publishing a GitHub release from main builds the server image and pushes it to GitHub's container registry. The work is done by [.github/workflows/release.yml](.github/workflows/release.yml). Nothing is deployed: you do that by hand on the server.
+
+```bash
+gh release create v1.2.0-beta.1 --target main --prerelease --generate-notes   # beta
+gh release create v1.2.0 --target main --generate-notes                       # prod
+```
+
+| Release tag | Image tags |
+|---|---|
+| `vX.Y.Z-beta` or `vX.Y.Z-beta.N` | `ghcr.io/tamingit/greenglow:X.Y.Z-beta.N` and `:beta` |
+| `vX.Y.Z` | `ghcr.io/tamingit/greenglow:X.Y.Z` and `:prod` |
+
+- **Checks first:** every check in `ci/Dockerfile` (`npm run ci`, browser tests included) must pass before anything is pushed.
+- **Refused:** any other tag, and any release whose commit isn't on main. Nothing is built for them.
+- **Kept:** each version keeps its own image tag, so you can go back to one.
+
+### Running a release
+
+On the server, make a folder for each instance (say `~/greenglow-prod`) holding three things:
+
+- **`compose.yml`:** the example below.
+- **`greenglow.env`:** the settings.
+- **`config/connections.json` and `certs/ibmi-ca.pem`:** as in [Getting started](#getting-started).
+
+```yaml
+# ~/greenglow-prod/compose.yml
+# Deploy or update:  docker compose pull && docker compose up -d
+services:
+  greenglow:
+    # :prod follows the latest prod release; :beta the latest beta. A version (:1.2.0) stays put.
+    image: ghcr.io/tamingit/greenglow:prod
+    container_name: greenglow-prod
+    restart: unless-stopped
+    init: true
+    env_file: greenglow.env
+    environment:
+      # Paths inside the container.
+      Seed__ConnectionsFile: /app/config/connections.json
+      Relay__CaFile: /app/certs/ibmi-ca.pem
+      Data__DbPath: /app/data/greenglow.db
+      # Behind the TLS proxy on this host.
+      Server__TrustForwardedHeaders: 'true'
+    ports:
+      # Localhost only, for the TLS proxy. Published on all interfaces, anyone on the network
+      # could reach the IBM i through this server.
+      - '127.0.0.1:5090:8080'
+    volumes:
+      - ./config:/app/config:ro
+      - ./certs:/app/certs:ro
+      # The SQLite database and the sign-in keys: back it up.
+      - greenglow-data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+
+volumes:
+  greenglow-data:
+```
+
+```bash
+# ~/greenglow-prod/greenglow.env (never commit it)
+Server__PublicUrl=https://greenglow.example.com
+Entra__TenantId=00000000-0000-0000-0000-000000000000
+Entra__ClientId=00000000-0000-0000-0000-000000000000
+Entra__ClientSecret=
+Entra__InitialAdminUpn=someone@example.com
+# This server's node number, 1 to 9, unique among every GreenGlow reaching the same IBM i.
+Cluster__NodeId=1
+```
+
+- **Beta:** copy the folder to `~/greenglow-beta` and change four things:
+  - the image to `:beta`
+  - `container_name` to `greenglow-beta`
+  - the port to `127.0.0.1:5091:8080`
+  - `Cluster__NodeId` to 8
+
+  Give beta its own Entra redirect URI (`<beta URL>/auth/callback`). Each folder gets its own volume, because Compose names volumes after the folder.
+- **Going back:** set `image:` to an earlier version, such as `:1.1.0`, and run `docker compose up -d`.
+- **Health:** the image has a health check; `docker compose ps` shows it.
+- **Registry sign-in:** if the `greenglow` package on GitHub is private, sign the server in once with `docker login ghcr.io`, using a token that has `read:packages`.
 
 ## Public demo
 
