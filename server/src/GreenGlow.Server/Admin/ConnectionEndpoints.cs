@@ -21,7 +21,8 @@ public static class ConnectionEndpoints
         bool? IsTest,
         bool? Enabled,
         int? SortOrder,
-        string? Color = null);
+        string? Color = null,
+        bool? UsePortMapper = null);
 
     public sealed record GrantRequest(string? Type, string? Id, string? Name);
 
@@ -82,6 +83,7 @@ public static class ConnectionEndpoints
             var connection = await db.Connections.Include(c => c.Grants).FirstOrDefaultAsync(c => c.Id == id);
             if (connection is null) return Results.NotFound();
             db.UserColors.RemoveRange(await db.UserColors.Where(c => c.ConnectionId == id).ToListAsync());
+            db.IbmLogins.RemoveRange(await db.IbmLogins.Where(l => l.ConnectionId == id).ToListAsync());
             db.Connections.Remove(connection);
             await db.SaveChangesAsync();
             return Results.NoContent();
@@ -150,7 +152,7 @@ public static class ConnectionEndpoints
     }
 
     /// <summary>Applies the fields a request gives. Returns a problem response if one is invalid.</summary>
-    private static IResult? Apply(HostConnection connection, ConnectionRequest request)
+    internal static IResult? Apply(HostConnection connection, ConnectionRequest request)
     {
         if (request.Label is not null)
         {
@@ -186,6 +188,7 @@ public static class ConnectionEndpoints
         if (request.IsTest is { } isTest) connection.IsTest = isTest;
         if (request.Enabled is { } enabled) connection.Enabled = enabled;
         if (request.SortOrder is { } order) connection.SortOrder = order;
+        if (request.UsePortMapper is { } mapper) connection.UsePortMapper = mapper;
         if (request.Color is { } color)
         {
             // An empty colour takes it away.
@@ -196,7 +199,7 @@ public static class ConnectionEndpoints
         return null;
     }
 
-    private static IResult Problem(string field, string message) =>
+    internal static IResult Problem(string field, string message) =>
         Results.BadRequest(new { error = field, message });
 
     /// <summary>
@@ -214,6 +217,7 @@ public static class ConnectionEndpoints
         isTest = c.IsTest,
         enabled = c.Enabled,
         sortOrder = c.SortOrder,
+        usePortMapper = c.UsePortMapper,
         color = c.Color,
         // tls://: whether its certificate is checked, and the CA trusted for it alone, if any.
         verified = c.Secure && (serverCa || c.TrustedCaPem is not null),

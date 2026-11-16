@@ -130,6 +130,9 @@ namespace GreenGlow.Server.Data.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("Disabled")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -145,6 +148,16 @@ namespace GreenGlow.Server.Data.Migrations
 
                     b.Property<long>("LastSeenAt")
                         .HasColumnType("INTEGER");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PasswordHash")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Upn")
                         .IsRequired()
@@ -310,12 +323,50 @@ namespace GreenGlow.Server.Data.Migrations
                     b.Property<long>("UpdatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("UsePortMapper")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
                         .IsUnique();
 
                     b.ToTable("Connections", (string)null);
+                });
+
+            modelBuilder.Entity("GreenGlow.Server.Data.IbmLogin", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConnectionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("IbmUser")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SealedPassword")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConnectionId");
+
+                    b.HasIndex("UserId", "ConnectionId", "IbmUser")
+                        .IsUnique();
+
+                    b.ToTable("IbmLogins");
                 });
 
             modelBuilder.Entity("GreenGlow.Server.Data.Macro", b =>
@@ -528,6 +579,17 @@ namespace GreenGlow.Server.Data.Migrations
                 {
                     b.HasOne("GreenGlow.Server.Data.HostConnection", "Connection")
                         .WithMany("Grants")
+                        .HasForeignKey("ConnectionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Connection");
+                });
+
+            modelBuilder.Entity("GreenGlow.Server.Data.IbmLogin", b =>
+                {
+                    b.HasOne("GreenGlow.Server.Data.HostConnection", "Connection")
+                        .WithMany()
                         .HasForeignKey("ConnectionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();

@@ -27,6 +27,7 @@ public sealed class GreenGlowDb(DbContextOptions<GreenGlowDb> options) : DbConte
     public DbSet<SessionShare> Shares => Set<SessionShare>();
     public DbSet<ShareRecipient> ShareRecipients => Set<ShareRecipient>();
     public DbSet<UserConnectionColor> UserColors => Set<UserConnectionColor>();
+    public DbSet<IbmLogin> IbmLogins => Set<IbmLogin>();
     public DbSet<Macro> Macros => Set<Macro>();
     public DbSet<MacroShare> MacroShares => Set<MacroShare>();
     public DbSet<MacroKey> MacroKeys => Set<MacroKey>();
@@ -45,6 +46,7 @@ public sealed class GreenGlowDb(DbContextOptions<GreenGlowDb> options) : DbConte
         {
             user.HasIndex(u => u.Upn).IsUnique();
             user.Property(u => u.Upn).UseCollation("NOCASE");
+            user.Property(u => u.Source).HasConversion<string>();
         });
 
         model.Entity<HostConnection>(connection =>
@@ -61,6 +63,12 @@ public sealed class GreenGlowDb(DbContextOptions<GreenGlowDb> options) : DbConte
             color.ToTable("UserColors");
             color.HasKey(c => new { c.UserId, c.ConnectionId });
             color.HasOne(c => c.Connection).WithMany().HasForeignKey(c => c.ConnectionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        model.Entity<IbmLogin>(login =>
+        {
+            login.HasIndex(l => new { l.UserId, l.ConnectionId, l.IbmUser }).IsUnique();
+            login.HasOne(l => l.Connection).WithMany().HasForeignKey(l => l.ConnectionId).OnDelete(DeleteBehavior.Cascade);
         });
 
         model.Entity<ConnectionGrant>()

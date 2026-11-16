@@ -14,6 +14,9 @@ public sealed record CurrentUser(string Id, string Upn, string Name)
             : null;
 }
 
+/// <summary>A sign-in under a name that an account left from another sign-in method still has.</summary>
+public sealed class NameTakenException(string name) : Exception($"The name {name} belongs to an account from another sign-in method.");
+
 /// <summary>The UPN made an administrator when it signs in (Entra:InitialAdminUpn).</summary>
 public sealed record AdminSeed(string Upn);
 
@@ -22,30 +25,110 @@ public sealed class UserStore(IDbContextFactory<GreenGlowDb> dbs, TimeProvider c
 {
     public const string AdminRole = "admin";
 
-    /// <summary>Records a sign-in and returns the identity the cookie keeps.</summary>
-    public async Task<ClaimsIdentity> SignInAsync(string objectId, string upn, string name)
+    /// <summary>Records a sign-in and returns the identity the cookie keeps. Null: the account is switched off.</summary>
+    public async Task<ClaimsIdentity?> SignInAsync(string objectId, string upn, string name, UserSource source)
     {
         await using var db = await dbs.CreateDbContextAsync();
         var now = clock.GetUtcNow();
         var user = await db.Users.FindAsync(objectId);
         if (user is null)
         {
-            user = new AppUser { Id = objectId, Upn = upn, FirstSeenAt = now };
+            user = new AppUser { Id = objectId, Upn = upn, FirstSeenAt = now, Source = source };
             db.Users.Add(user);
         }
+        if (user.Disabled) return null;
         user.Upn = upn;
         user.DisplayName = name.Length > 0 ? name : user.DisplayName;
         user.LastSeenAt = now;
-        if (IsInitialAdmin(upn)) user.IsAdmin = true;
-        await db.SaveChangesAsync();
+        if (source == UserSource.Entra && IsInitialAdmin(upn)) user.IsAdmin = true;
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // The name belongs to an account left from another sign-in method.
+            throw new NameTakenException(upn);
+        }
+        return Identity(user);
+    }
 
-        return new ClaimsIdentity(
-            [
-                new Claim(Claims.ObjectId, user.Id),
-                new Claim(Claims.Upn, user.Upn),
-                new Claim(Claims.Name, user.DisplayName.Length > 0 ? user.DisplayName : user.Upn),
-            ],
-            CookieAuthenticationDefaults.AuthenticationScheme, Claims.Name, null);
+    /// <summary>Entra ID (and the dev login, which stands in for it): never refused here.</summary>
+    public async Task<ClaimsIdentity> SignInAsync(string objectId, string upn, string name) =>
+        await SignInAsync(objectId, upn, name, UserSource.Entra)
+        ?? throw new InvalidOperationException("That account is switched off.");
+
+    /// <summary>A sign-in by an account that is already in the table (a local account, the breakglass administrator).</summary>
+    public async Task<ClaimsIdentity> SignInKnownAsync(string id)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        var user = await db.Users.FindAsync(id) ?? throw new InvalidOperationException("No such user.");
+        user.LastSeenAt = clock.GetUtcNow();
+        await db.SaveChangesAsync();
+        return Identity(user);
+    }
+
+    public static ClaimsIdentity Identity(AppUser user) => new(
+        [
+            new Claim(Claims.ObjectId, user.Id),
+            new Claim(Claims.Upn, user.Upn),
+            new Claim(Claims.Name, user.DisplayName.Length > 0 ? user.DisplayName : user.Upn),
+        ],
+        CookieAuthenticationDefaults.AuthenticationScheme, Claims.Name, null);
+
+    /// <summary>The ID of an IBM i user profile's account: always the same for the same profile.</summary>
+    public static string IbmUserId(string profile) => AuthSetup.DevObjectId("ibmi:" + profile.Trim().ToUpperInvariant());
+
+    public async Task<AppUser?> FindByUpnAsync(string upn)
+    {
+        upn = upn.Trim();
+        if (upn.Length is 0 or > 256) return null;
+        await using var db = await dbs.CreateDbContextAsync();
+        return await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Upn == upn);
+    }
+
+    /// <summary>Changes one user's row; false when there is no such user.</summary>
+    public async Task<bool> UpdateAsync(string id, Action<AppUser> change)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        if (await db.Users.FindAsync(id) is not { } user) return false;
+        change(user);
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<IReadOnlyList<AppUser>> AllAsync()
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        return await db.Users.AsNoTracking().Where(u => !u.IsGuest).OrderBy(u => u.Upn).ToListAsync();
+    }
+
+    /// <summary>Removes users with everything of theirs (see <see cref="RemoveAsync(GreenGlowDb, List{AppUser})"/>).</summary>
+    public async Task<bool> RemoveAsync(string id)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        if (await db.Users.FindAsync(id) is not { } user) return false;
+        await RemoveAsync(db, [user]);
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    /// <summary>
+    /// Marks users for removal with their colours, saved IBM i logins, macros and macro keys,
+    /// one row at a time so each delete is journalled for the other nodes. Connection log rows
+    /// are kept. The caller saves.
+    /// </summary>
+    private static async Task RemoveAsync(GreenGlowDb db, List<AppUser> users)
+    {
+        var ids = users.Select(u => u.Id).ToList();
+        db.UserColors.RemoveRange(await db.UserColors.Where(c => ids.Contains(c.UserId)).ToListAsync());
+        db.IbmLogins.RemoveRange(await db.IbmLogins.Where(l => ids.Contains(l.UserId)).ToListAsync());
+        db.MacroKeys.RemoveRange(await db.MacroKeys.Where(k => ids.Contains(k.UserId)).ToListAsync());
+        var macros = await db.Macros.Include(m => m.Shares).Where(m => ids.Contains(m.OwnerUserId)).ToListAsync();
+        var macroIds = macros.Select(m => m.Id).ToList();
+        db.MacroKeys.RemoveRange(await db.MacroKeys.Where(k => macroIds.Contains(k.MacroId)).ToListAsync());
+        db.Macros.RemoveRange(macros);
+        db.Users.RemoveRange(users);
     }
 
     /// <summary>A new demo guest: a fresh ID, a made-up UPN that can't be anyone's, never an administrator.</summary>
@@ -88,14 +171,7 @@ public sealed class UserStore(IDbContextFactory<GreenGlowDb> dbs, TimeProvider c
         var old = (await db.Users.Where(u => u.IsGuest).ToListAsync())
             .Where(u => u.LastSeenAt < before && !inUse.Contains(u.Id)).ToList();
         if (old.Count == 0) return 0;
-        var ids = old.Select(u => u.Id).ToList();
-        db.UserColors.RemoveRange(await db.UserColors.Where(c => ids.Contains(c.UserId)).ToListAsync());
-        db.MacroKeys.RemoveRange(await db.MacroKeys.Where(k => ids.Contains(k.UserId)).ToListAsync());
-        var macros = await db.Macros.Include(m => m.Shares).Where(m => ids.Contains(m.OwnerUserId)).ToListAsync();
-        var macroIds = macros.Select(m => m.Id).ToList();
-        db.MacroKeys.RemoveRange(await db.MacroKeys.Where(k => macroIds.Contains(k.MacroId)).ToListAsync());
-        db.Macros.RemoveRange(macros);
-        db.Users.RemoveRange(old);
+        await RemoveAsync(db, old);
         await db.SaveChangesAsync();
         return old.Count;
     }
@@ -151,6 +227,8 @@ public sealed class UserStore(IDbContextFactory<GreenGlowDb> dbs, TimeProvider c
         await using var transaction = await db.Database.BeginTransactionAsync();
         var user = await db.Users.FindAsync(objectId);
         if (user is null || !user.IsAdmin) return true;
+        // The breakglass administrator is always one; it isn't removed, only given a new password.
+        if (user.Source == UserSource.Breakglass) return false;
         if (await db.Users.CountAsync(u => u.IsAdmin) <= 1) return false;
         user.IsAdmin = false;
         await db.SaveChangesAsync();

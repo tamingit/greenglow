@@ -1,3 +1,4 @@
+using GreenGlow.Engine;
 using System.Collections.Concurrent;
 using GreenGlow.Server.Auth;
 using GreenGlow.Server.Cluster;
@@ -75,7 +76,9 @@ public sealed class SessionManager(
     /// Opens a session on a target for a user, with a device name kept for them if there is one,
     /// else the lowest free one. A spare is the lowest free name not kept for anyone.
     /// </summary>
-    public async Task<HostSession> CreateAsync(CurrentUser owner, Target target, string? clientIp, bool spare = false)
+    /// <param name="signOn">A saved login to sign the session on with during negotiation, and what to do if the IBM i refuses it.</param>
+    public async Task<HostSession> CreateAsync(CurrentUser owner, Target target, string? clientIp, bool spare = false,
+        AutoSignOn? signOn = null, Action? signOnRefused = null)
     {
         HostSession session;
         lock (_lock)
@@ -91,7 +94,7 @@ public sealed class SessionManager(
             var device = PickDevice(owner, target, spare);
             var id = Guid.NewGuid();
             session = new HostSession(id, owner, target, device, clock.GetUtcNow(),
-                cancel => connector.ConnectAsync(target, cancel), clock, loggers.CreateLogger<HostSession>());
+                cancel => connector.ConnectAsync(target, cancel), clock, loggers.CreateLogger<HostSession>(), signOn);
             _sessions[id] = session;
         }
 
@@ -105,6 +108,7 @@ public sealed class SessionManager(
             ConnectionName = target.Name,
             DeviceName = session.DeviceName,
         });
+        if (signOnRefused is not null) session.SignOnRefused += _ => signOnRefused();
         session.Finished += OnFinished;
         session.FrontendsChanged += OnFrontendsChanged;
         session.FactsChanged += OnFactsChanged;

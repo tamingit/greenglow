@@ -7,14 +7,49 @@ public sealed class Setting
     public required string Value { get; set; }
 }
 
-/// <summary>An Entra ID user who has signed in at least once.</summary>
+/// <summary>Where a user's account is: which sign-in method lets them in.</summary>
+public enum UserSource
+{
+    /// <summary>Entra ID (and the dev login and demo guests, which stand in for it).</summary>
+    Entra,
+
+    /// <summary>An account in this database, with a password an administrator set.</summary>
+    Local,
+
+    /// <summary>An IBM i user profile on the system chosen for sign-in.</summary>
+    IbmI,
+
+    /// <summary>The breakglass administrator: one row, made at first-run setup.</summary>
+    Breakglass,
+}
+
+/// <summary>
+/// Someone who has signed in at least once, or whom an administrator added: an Entra ID user,
+/// a local account, an IBM i user profile, or the breakglass administrator.
+/// </summary>
 public sealed class AppUser
 {
-    /// <summary>The Entra object ID (oid claim).</summary>
+    /// <summary>The breakglass administrator's ID and name.</summary>
+    public const string BreakglassId = "breakglass";
+
+    /// <summary>The Entra object ID (oid claim); a UUID of the server's own for other sources.</summary>
     public required string Id { get; set; }
+
+    /// <summary>What the user signs in as: an Entra UPN, a local user name, or an IBM i user profile.</summary>
     public required string Upn { get; set; }
     public string DisplayName { get; set; } = "";
     public bool IsAdmin { get; set; }
+
+    public UserSource Source { get; set; }
+
+    /// <summary>For local accounts and the breakglass administrator: the password, hashed (see PasswordHash).</summary>
+    public string? PasswordHash { get; set; }
+
+    /// <summary>A local account that must choose a new password at its next sign-in.</summary>
+    public bool MustChangePassword { get; set; }
+
+    /// <summary>An account an administrator switched off: it can't sign in, and is signed out at once.</summary>
+    public bool Disabled { get; set; }
 
     /// <summary>A demo guest (Demo:Enabled): no account, removed some time after their last visit.</summary>
     public bool IsGuest { get; set; }
@@ -49,6 +84,12 @@ public sealed class HostConnection
     public bool Enabled { get; set; } = true;
     public int SortOrder { get; set; }
 
+    /// <summary>
+    /// Ask the IBM i's port mapper (port 449) where its host servers listen (sign-on, printer
+    /// output), for a system whose ports were moved. Off: IBM's default ports.
+    /// </summary>
+    public bool UsePortMapper { get; set; }
+
     /// <summary>The system's colour (#rrggbb) on the page, or none; users may choose their own.</summary>
     public string? Color { get; set; }
 
@@ -73,6 +114,29 @@ public sealed class HostConnection
     public List<ConnectionGrant> Grants { get; set; } = [];
 
     public string Url => $"{(Secure ? "tls" : "tcp")}://{(Host.Contains(':') ? $"[{Host}]" : Host)}:{Port}";
+}
+
+/// <summary>
+/// An IBM i user a GreenGlow user signs on with at one system: a user may keep several per
+/// system. The password is kept only when the user asked for it to be remembered, sealed
+/// with a key that isn't in the database (Credentials:Key); otherwise it lives in the server's
+/// memory while the user is signed in, and is asked for again after that.
+/// </summary>
+public sealed class IbmLogin
+{
+    public Guid Id { get; set; } = Guid.CreateVersion7();
+    public required string UserId { get; set; }
+    public Guid ConnectionId { get; set; }
+    public HostConnection? Connection { get; set; }
+
+    /// <summary>The IBM i user profile, upper case; unique per user and connection.</summary>
+    public required string IbmUser { get; set; }
+
+    /// <summary>The remembered password, sealed (see CredentialSeal); null when it isn't remembered.</summary>
+    public string? SealedPassword { get; set; }
+
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
 }
 
 /// <summary>A user's own colour for a connection, in place of the one an administrator set.</summary>
@@ -126,6 +190,13 @@ public enum LogKind
 
     /// <summary>An administrator drained, resumed or resynced a node (several servers).</summary>
     Node,
+
+    /// <summary>
+    /// A sign-in to GreenGlow with a password (a local account, an IBM i user profile, the
+    /// breakglass administrator), accepted or refused, a password change, or a change to how
+    /// people sign in.
+    /// </summary>
+    SignIn,
 }
 
 /// <summary>

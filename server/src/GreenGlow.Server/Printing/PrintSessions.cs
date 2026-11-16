@@ -1,3 +1,4 @@
+using GreenGlow.Server.HostServers;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using GreenGlow.Server.Auth;
@@ -85,12 +86,14 @@ public sealed class PrintSessions : IAsyncDisposable
     private readonly ConnectionLogger _log;
     private readonly TimeProvider _clock;
     private readonly PrinterOptions _options;
+    private readonly HostEndpoints _endpoints;
     private readonly ILogger _logger;
     private readonly ITimer _sweep;
 
     public PrintSessions(HostConnector connector, ConnectionLogger log, TimeProvider clock, PrinterOptions options,
-        ILogger<PrintSessions> logger)
+        HostEndpoints endpoints, ILogger<PrintSessions> logger)
     {
+        _endpoints = endpoints;
         _connector = connector;
         _log = log;
         _clock = clock;
@@ -101,13 +104,8 @@ public sealed class PrintSessions : IAsyncDisposable
 
     public TimeSpan Idle => TimeSpan.FromMinutes(Math.Max(1, _options.IdleMinutes));
 
-    /// <summary>The Network Print server for a connection: its host, over TLS when the connection is.</summary>
-    public Target EndpointFor(Target telnet) => telnet with
-    {
-        Port = telnet.Secure
-            ? _options.SecurePort ?? HostService.NetworkPrint.SecurePort
-            : _options.Port ?? HostService.NetworkPrint.Port,
-    };
+    /// <summary>The Network Print server's default port for a connection: its host, over TLS when the connection is.</summary>
+    public Target EndpointFor(Target telnet) => _endpoints.Default(telnet, HostService.NetworkPrint);
 
     /// <summary>
     /// Signs on (once; see <see cref="HostServerClient.SignOnAsync"/>) and keeps the session,
@@ -119,7 +117,8 @@ public sealed class PrintSessions : IAsyncDisposable
         NetworkPrintClient client;
         try
         {
-            client = await NetworkPrintClient.ConnectAsync(_connector, EndpointFor(target), ibmUser, password, cancel);
+            var endpoint = await _endpoints.ForAsync(target, HostService.NetworkPrint, cancel);
+            client = await NetworkPrintClient.ConnectAsync(_connector, endpoint, ibmUser, password, cancel);
         }
         catch (SignOnException e) when (e.Failure is not (SignOnFailure.InvalidUser or SignOnFailure.InvalidPassword) || e.Code != 0)
         {

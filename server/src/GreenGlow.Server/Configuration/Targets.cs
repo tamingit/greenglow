@@ -5,8 +5,9 @@ namespace GreenGlow.Server.Configuration;
 /// <summary>An IBM i system the server may connect to. The browser only ever sees Name and Label.</summary>
 /// <param name="MaxSessionsPerUser">Most host sessions one user may have open on it at once.</param>
 /// <param name="IsTest">A test system, where automated sign-on tests may run.</param>
+/// <param name="UsePortMapper">Ask the IBM i's port mapper (449) where its host servers listen, instead of IBM's default ports.</param>
 public sealed record Target(string Name, string Label, bool Secure, string Host, int Port, int MaxSessionsPerUser = 3, bool IsTest = false,
-    string? Color = null, string? TrustedCaPem = null, string? TrustedName = null);
+    string? Color = null, string? TrustedCaPem = null, string? TrustedName = null, bool UsePortMapper = false);
 
 public sealed class ConfigException(string message) : Exception(message);
 

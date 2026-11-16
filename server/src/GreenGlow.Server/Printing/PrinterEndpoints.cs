@@ -1,3 +1,4 @@
+using GreenGlow.Server.HostServers;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using GreenGlow.Server.Auth;
@@ -15,7 +16,10 @@ namespace GreenGlow.Server.Printing;
 /// </summary>
 public static partial class PrinterEndpoints
 {
-    public sealed record SignOnRequest(string? User, string? Password);
+    /// <param name="Login">One of the user's saved logins for the system, in place of a typed user and password.</param>
+    /// <param name="Save">Keep the typed user and password as a saved login, once the IBM i accepted them.</param>
+    /// <param name="Remember">With Save: also keep the password (sealed) in the database.</param>
+    public sealed record SignOnRequest(string? User, string? Password, Guid? Login = null, bool? Save = null, bool? Remember = null);
 
     [GeneratedRegex("^[0-9a-f]{24}$")]
     private static partial Regex FileId();
@@ -27,38 +31,54 @@ public static partial class PrinterEndpoints
         // Whether the user is signed on there, and as whom; otherwise the IBM i user to offer,
         // from the user's own session on that system.
         printer.MapGet("", async (string connection, HttpContext context, Access access, PrintSessions prints,
-            SessionManager sessions) =>
+            SessionManager sessions, Logins.IbmLogins logins) =>
         {
             var user = CurrentUser.From(context.User)!;
-            if (await access.FindAsync(user, connection) is null) return NoSystem();
+            if (await access.FindAsync(user, connection) is not { } target) return NoSystem();
             var session = prints.Find(user.Id, connection);
             var suggested = sessions.All
                 .Where(s => s.Owner.Id == user.Id && s.Target.Name == connection && !string.IsNullOrEmpty(s.IbmUser))
                 .Select(s => s.IbmUser).FirstOrDefault();
-            return Results.Json(new { signedOn = session is not null, ibmUser = session?.IbmUser, suggestedUser = suggested });
+            return Results.Json(new
+            {
+                signedOn = session is not null,
+                ibmUser = session?.IbmUser,
+                suggestedUser = suggested,
+                // The user's saved logins for the system: one that is ready signs the panel on without asking.
+                canRemember = logins.CanRemember,
+                logins = (await logins.ListAsync(user.Id, target)).Select(Logins.LoginEndpoints.Describe),
+            });
         });
 
         printer.MapPost("/signon", async (string connection, SignOnRequest request, HttpContext context, Access access,
-            PrintSessions prints) =>
+            PrintSessions prints, Logins.IbmLogins logins) =>
         {
             var user = CurrentUser.From(context.User)!;
             var target = await access.FindAsync(user, connection);
             if (target is null) return NoSystem();
+            var (ibmUser, password) = (request.User ?? "", request.Password ?? "");
+            if (request.Login is { } loginId)
+            {
+                var login = await logins.CredentialsAsync(user.Id, target, loginId);
+                if (login is null) return Results.NotFound(new { error = "unknown-login", message = "That login isn't saved any more." });
+                if (login.Value.Password is null)
+                    return Results.Conflict(new { error = "password-needed", message = $"Type the password for {login.Value.IbmUser}." });
+                (ibmUser, password) = (login.Value.IbmUser, login.Value.Password);
+            }
             try
             {
-                var session = await prints.SignOnAsync(user, target, ClientAddress.Of(context), request.User ?? "",
-                    request.Password ?? "", context.RequestAborted);
+                var session = await prints.SignOnAsync(user, target, ClientAddress.Of(context), ibmUser, password, context.RequestAborted);
+                if (request.Login is null && request.Save == true)
+                    await logins.SaveAsync(user.Id, target, session.IbmUser, password, request.Remember);
                 return Results.Json(new { signedOn = true, ibmUser = session.IbmUser });
             }
             catch (SignOnException e)
             {
-                var status = e.Failure switch
-                {
-                    SignOnFailure.InvalidUser or SignOnFailure.InvalidPassword when e.Code == 0 => StatusCodes.Status400BadRequest,
-                    SignOnFailure.Unreachable or SignOnFailure.Protocol => StatusCodes.Status502BadGateway,
-                    _ => StatusCodes.Status422UnprocessableEntity,
-                };
-                return Results.Json(new { error = Kebab(e.Failure), message = e.Message }, statusCode: status);
+                // A saved login the IBM i no longer takes is dropped, so it is never tried twice.
+                if (request.Login is not null
+                    && e.Failure is SignOnFailure.WrongPassword or SignOnFailure.WrongPasswordDisabled or SignOnFailure.PasswordExpired)
+                    await logins.RefusedAsync(user.Id, target, ibmUser);
+                return Logins.LoginEndpoints.Failure(e);
             }
             catch (PrintServerException e)
             {
@@ -166,7 +186,4 @@ public static partial class PrinterEndpoints
         await prints.EndAsync(session, "connection lost");
         return Results.Conflict(new { error = "signon-needed", message = $"{e.Message} Sign on again." });
     }
-
-    private static string Kebab(SignOnFailure failure) =>
-        Regex.Replace(failure.ToString(), "(?<=[a-z])(?=[A-Z])", "-").ToLowerInvariant();
 }
