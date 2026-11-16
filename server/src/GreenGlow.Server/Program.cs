@@ -74,7 +74,7 @@ builder.Services.AddSingleton<SettingsStore>();
 builder.Services.AddSingleton<ConnectionLogger>();
 builder.Services.AddSingleton<TargetCatalog>();
 builder.Services.AddSingleton(HostConnector.Create(relay.CaFile, relay.CaPem));
-builder.Services.AddSingleton(new OriginPolicy(server));
+builder.Services.AddSingleton<OriginPolicy>();
 builder.Services.AddGreenGlowRateLimiter(
     builder.Configuration.GetSection("RateLimit").Get<RateLimitOptions>() ?? new RateLimitOptions(), demo);
 builder.Services.AddSingleton<SessionManager>();

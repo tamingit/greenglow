@@ -71,7 +71,7 @@ const breakglass = h(
   field(
     'Breakglass password',
     input('breakglassPassword', 'password', { autocomplete: 'new-password', required: true }),
-    'The way in if the sign-in method stops working. At least 12 characters.',
+    'The way in if the sign-in method stops working. Requirements: 12 to 128 characters.',
   ),
   field(
     'Confirm breakglass password',
@@ -107,6 +107,7 @@ const local = section(
   field(
     'Password',
     input('local.password', 'password', { autocomplete: 'new-password', required: true }),
+    'Requirements: 12 to 128 characters.',
   ),
   field(
     'Confirm password',
@@ -162,13 +163,26 @@ const methods = h(
   ),
 );
 
+const publicUrl = input('publicUrl', 'text', { required: true, value: location.origin });
 const submit = h('button', {
   type: 'submit',
   class: 'admin-btn',
   text: 'Save and open administration',
 });
 
-form.append(breakglass, methods, entra, local, ibmi, h('div', { class: 'setup-actions' }, submit));
+form.append(
+  field(
+    'Address of this server',
+    publicUrl,
+    'The address people open GreenGlow at, with http:// or https:// and the port if it isn’t the default. Pre-filled with the address this page is open at.',
+  ),
+  breakglass,
+  methods,
+  entra,
+  local,
+  ibmi,
+  h('div', { class: 'setup-actions' }, submit),
+);
 
 function selected(): Method {
   const checked = form.querySelector<HTMLInputElement>('input[name="method"]:checked');
@@ -209,7 +223,11 @@ function value(name: string): string {
 
 function body(): Record<string, unknown> {
   const method = selected();
-  const base = { breakglassPassword: value('breakglassPassword'), method };
+  const base = {
+    publicUrl: origin(value('publicUrl')),
+    breakglassPassword: value('breakglassPassword'),
+    method,
+  };
   if (method === 'entra')
     return {
       ...base,
@@ -243,11 +261,48 @@ function body(): Record<string, unknown> {
 }
 
 /** The first problem with what's typed, as a message and the field to point at, or null. */
+/** The origin of an address typed in the form (http or https, no path), or null when it isn't one. */
+function origin(text: string): string | null {
+  try {
+    const url = new URL(text.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (
+      (url.pathname !== '/' && url.pathname !== '') ||
+      url.search ||
+      url.hash ||
+      url.username ||
+      url.password
+    )
+      return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+/** The breakglass and local password rules, as the server checks them (its lengths count UTF-16 units too). */
+function passwordProblem(password: string): string | null {
+  if (password.length < 12) return 'The password must have at least 12 characters.';
+  if (password.length > 128) return 'The password can have at most 128 characters.';
+  return null;
+}
+
 function checkLocally(): { field: string; text: string } | null {
+  if (origin(value('publicUrl')) === null)
+    return {
+      field: 'publicUrl',
+      text: 'The address is an origin such as http://localhost:8080 or https://greenglow.example.com, with no path.',
+    };
+  const breakglass = passwordProblem(value('breakglassPassword'));
+  if (breakglass) return { field: 'breakglassPassword', text: breakglass };
   if (value('breakglassPassword') !== value('breakglassConfirm'))
     return { field: 'breakglassConfirm', text: 'The breakglass passwords don’t match.' };
-  if (selected() === 'local' && value('local.password') !== value('local.passwordConfirm'))
-    return { field: 'local.passwordConfirm', text: 'The passwords don’t match.' };
+  if (selected() === 'local') {
+    const local = passwordProblem(value('local.password'));
+    if (local) return { field: 'local.password', text: local };
+    if (value('local.password') !== value('local.passwordConfirm'))
+      return { field: 'local.passwordConfirm', text: 'The passwords don’t match.' };
+  }
   return null;
 }
 

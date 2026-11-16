@@ -28,7 +28,7 @@ public sealed record IbmChoice(string? Connection, ConnectionEndpoints.Connectio
 
 /// <summary>POST /auth/setup, and PUT /api/admin/signin (without the token).</summary>
 public sealed record SignInChoice(string? BreakglassPassword, string? Method, EntraChoice? Entra, LocalChoice? Local,
-    IbmChoice? Ibmi);
+    IbmChoice? Ibmi, string? PublicUrl = null);
 
 /// <summary>
 /// Chooses how people sign in: at first-run setup, and later on the admin page. Everything a
@@ -68,6 +68,13 @@ public sealed partial class SignInSetup(
                 return Problem(StatusCodes.Status409Conflict, "from-environment", "The sign-in method is set in the server's environment.");
             if (initial && config.Mode != SignInMode.Setup)
                 return Problem(StatusCodes.Status409Conflict, "already-set-up", "This server is already set up. Sign in to change it.");
+
+            // The address people open GreenGlow at. Setup needs it, so the origin check can allow it.
+            var publicUrl = PublicAddress.Parse(choice.PublicUrl);
+            if (initial && publicUrl is null)
+                return Field("publicUrl", "Enter the address people open GreenGlow at, such as http://localhost:8080 or https://greenglow.example.com.");
+            if (choice.PublicUrl is not null && publicUrl is null)
+                return Field("publicUrl", "The address is an origin such as http://localhost:8080 or https://greenglow.example.com, with no path.");
 
             await using var db = await dbs.CreateDbContextAsync(cancel);
             var now = clock.GetUtcNow();
@@ -217,6 +224,7 @@ public sealed partial class SignInSetup(
                     return Field("method", "Choose Entra ID, local accounts or IBM i sign-in.");
             }
 
+            if (publicUrl is not null) values[PublicAddress.Setting] = publicUrl;
             SettingsStore.Apply(db, values);
             await db.SaveChangesAsync(cancel);
             settings.Forget();
