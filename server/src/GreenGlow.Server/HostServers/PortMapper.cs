@@ -89,6 +89,24 @@ public sealed class HostEndpoints(HostServerOptions options, PrinterOptions prin
         return telnet with { Port = port };
     }
 
+    /// <summary>
+    /// The file server's endpoint. The port mapper's port comes first, asked every time the
+    /// mapper is reachable; IBM's default (8473, or 9473 over TLS) is the fallback when the mapper
+    /// can't say (it is down, or doesn't know the service). A refused sign-on is never retried here.
+    /// </summary>
+    public async Task<Target> ForFileServerAsync(Target telnet, CancellationToken cancel)
+    {
+        try
+        {
+            return await ForAsync(telnet with { UsePortMapper = true }, HostService.FileServer, cancel);
+        }
+        catch (SignOnException e) when (e.Failure == SignOnFailure.Unreachable && !cancel.IsCancellationRequested)
+        {
+            Forget(telnet, HostService.FileServer);
+            return Default(telnet, HostService.FileServer);
+        }
+    }
+
     /// <summary>Forgets a remembered port, after a connection to it failed: the next lookup asks again.</summary>
     public void Forget(Target telnet, HostService service) =>
         _ports.TryRemove((telnet.Host.ToLowerInvariant(), service.MapName(telnet.Secure)), out _);
