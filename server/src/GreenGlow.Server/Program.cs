@@ -42,7 +42,8 @@ builder.Logging.AddJsonConsole(o => o.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fff
 var server = builder.Configuration.GetSection("Server").Get<ServerOptions>() ?? new ServerOptions();
 var relay = builder.Configuration.GetSection("Relay").Get<RelayOptions>() ?? new RelayOptions();
 var data = builder.Configuration.GetSection("Data").Get<DataOptions>() ?? new DataOptions();
-var seed = ConnectionSeed.Load(builder.Configuration.GetSection("Seed").Get<SeedOptions>() ?? new SeedOptions());
+var seedOptions = builder.Configuration.GetSection("Seed").Get<SeedOptions>() ?? new SeedOptions();
+var seed = ConnectionSeed.Load(seedOptions);
 var cluster = (builder.Configuration.GetSection("Cluster").Get<ClusterOptions>() ?? new ClusterOptions()).Validate();
 var demo = builder.Configuration.GetSection("Demo").Get<DemoOptions>() ?? new DemoOptions();
 builder.Services.AddSingleton(demo);
@@ -120,6 +121,8 @@ builder.Services.AddSingleton(s => new SeedRunner(seed, s.GetRequiredService<IDb
 
 var app = builder.Build();
 var clock = app.Services.GetRequiredService<TimeProvider>();
+if (!string.IsNullOrWhiteSpace(seedOptions.ConnectionsFile) && !File.Exists(seedOptions.ConnectionsFile))
+    app.Logger.LogWarning("no seed file at {Path}; connections are managed on the admin page", seedOptions.ConnectionsFile);
 await DatabaseSetup.PrepareAsync(app.Services, clock, data);
 var settingsStore = app.Services.GetRequiredService<SettingsStore>();
 var signInConfig = app.Services.GetRequiredService<SignInConfig>();

@@ -89,7 +89,9 @@ public static class ConnectionSeed
     public static IReadOnlyList<HostConnection> Load(SeedOptions options)
     {
         var sources = new List<(string Where, string Text)>();
-        if (!string.IsNullOrWhiteSpace(options.ConnectionsFile))
+        // A configured file that isn't there is skipped (Program logs it): connections can be
+        // managed on the admin page instead. A file that exists but can't be read still stops the start.
+        if (!string.IsNullOrWhiteSpace(options.ConnectionsFile) && File.Exists(options.ConnectionsFile))
         {
             try
             {
