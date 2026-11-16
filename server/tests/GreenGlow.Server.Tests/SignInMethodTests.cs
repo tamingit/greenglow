@@ -48,8 +48,9 @@ public sealed class SignInMethodTests
     private static async Task<JsonElement> Json(HttpResponseMessage response) =>
         await response.Content.ReadAsStringAsync(T.Token()) is { Length: > 0 } text ? JsonSerializer.Deserialize<JsonElement>(text) : default;
 
-    private static object LocalSetup() => new
+    private static object LocalSetup(string publicUrl = T.Origin) => new
     {
+        publicUrl,
         breakglassPassword = Breakglass,
         method = "local",
         local = new { user = "admin", name = "Local Admin", password = AdminPassword },
@@ -94,15 +95,49 @@ public sealed class SignInMethodTests
         Assert.Equal(HttpStatusCode.NotFound, (await factory.CreateClient().GetAsync("/Setup.html")).StatusCode);
     }
 
+    [Theory]
+    [InlineData("greenglow.example")]
+    [InlineData("http://host/path")]
+    [InlineData("ftp://host")]
+    public async Task SetupNeedsTheAddressAsAnOrigin(string address)
+    {
+        using var factory = Factory();
+        var refused = await Client(factory).PostAsJsonAsync("/auth/setup", LocalSetup(address), T.Token());
+        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal("publicUrl", (await Json(refused)).GetProperty("error").GetString());
+    }
+
     [Fact]
-    public async Task SetupNeedsNoTokenButStillNeedsAnAllowedOrigin()
+    public async Task SetupAcceptsAnyAddressAndTheSavedOneIsAllowedAfterwards()
+    {
+        using var factory = Factory();
+        const string address = "http://10.0.0.5:8080";
+        var options = new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = false };
+        var setup = factory.CreateClient(options);
+        setup.DefaultRequestHeaders.Add("Origin", address);
+        Assert.Equal(HttpStatusCode.OK, (await setup.PostAsJsonAsync("/auth/setup", LocalSetup(address), T.Token())).StatusCode);
+
+        var saved = factory.CreateClient(options);
+        saved.DefaultRequestHeaders.Add("Origin", address);
+        Assert.NotEqual(HttpStatusCode.Forbidden, (await saved.PostAsJsonAsync("/auth/breakglass", new { password = "wrong" }, T.Token())).StatusCode);
+
+        var stranger = factory.CreateClient(options);
+        stranger.DefaultRequestHeaders.Add("Origin", "http://evil.example");
+        Assert.Equal(HttpStatusCode.Forbidden, (await stranger.PostAsJsonAsync("/auth/breakglass", new { password = "wrong" }, T.Token())).StatusCode);
+    }
+
+    [Fact]
+    public async Task SetupNeedsNoTokenAndAcceptsARequestWithNoOriginOnce()
     {
         using var factory = Factory();
         var client = Client(factory);
         Assert.True((await Json(await client.GetAsync("/auth/setup"))).GetProperty("needed").GetBoolean());
 
         using var noOrigin = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.OK, (await noOrigin.PostAsJsonAsync("/auth/setup", LocalSetup(), T.Token())).StatusCode);
+        // Once set up, the Origin check applies again: without one the request is refused outright.
         Assert.Equal(HttpStatusCode.Forbidden, (await noOrigin.PostAsJsonAsync("/auth/setup", LocalSetup(), T.Token())).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Client(factory).PostAsJsonAsync("/auth/setup", LocalSetup(), T.Token())).StatusCode);
     }
 
     [Theory]
@@ -120,6 +155,7 @@ public sealed class SignInMethodTests
         using var factory = Factory();
         var client = Client(factory);
         var request = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(body)!;
+        request["publicUrl"] = JsonSerializer.SerializeToElement(T.Origin);
         var refused = await client.PostAsJsonAsync("/auth/setup", request, T.Token());
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         Assert.Equal(field, (await Json(refused)).GetProperty("error").GetString());
@@ -283,6 +319,7 @@ public sealed class SignInMethodTests
 
     private static object IbmSetup(string user = "PRTUSER", string password = "Secret12", bool usePortMapper = false) => new
     {
+        publicUrl = T.Origin,
         breakglassPassword = Breakglass,
         method = "ibmi",
         ibmi = new
@@ -429,6 +466,7 @@ public sealed class SignInMethodTests
 
     private static object EntraSetup() => new
     {
+        publicUrl = T.Origin,
         breakglassPassword = Breakglass,
         method = "entra",
         entra = new
