@@ -13,6 +13,9 @@ public sealed record HostService(string Name, ushort ServerId, int Port, int Sec
 {
     public static readonly HostService NetworkPrint = new("as-netprt", 0xE003, 8474, 9474);
 
+    /// <summary>The file server: the Integrated File System (IFS), by path.</summary>
+    public static readonly HostService FileServer = new("as-file", 0xE002, 8473, 9473);
+
     /// <summary>The sign-on server: checks a user and password, and changes a password.</summary>
     public static readonly HostService SignOn = new("as-signon", 0xE009, 8476, 9476);
 
