@@ -1,0 +1,78 @@
+/* First-run setup: one column, the sign-in method chosen by radio buttons. */
+
+.setup-main {
+  max-width: 40rem;
+}
+
+.setup-title {
+  margin: 1rem 0 0.5rem;
+  font-size: 1.4rem;
+}
+
+.setup-intro {
+  margin: 0 0 1.25rem;
+  color: var(--muted, #555);
+  line-height: 1.5;
+}
+
+.setup-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.setup-form fieldset {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--line, #c9d3cc);
+  border-radius: 6px;
+}
+
+/* The grid above would otherwise show the sections that aren't chosen. */
+.setup-form fieldset[hidden] {
+  display: none;
+}
+
+.setup-form legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+
+.setup-methods {
+  display: grid;
+  gap: 0.5rem;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.setup-method {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--line, #c9d3cc);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.setup-method small {
+  display: block;
+  color: var(--muted, #555);
+}
+
+.setup-hint {
+  color: var(--muted, #555);
+  font-size: 0.85rem;
+}
+
+.setup-form [aria-invalid='true'] {
+  border-color: #b3261e;
+}
+
+.setup-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
