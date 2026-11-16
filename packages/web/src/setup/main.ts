@@ -162,25 +162,13 @@ const methods = h(
   ),
 );
 
-const token = input('token', 'text', {
-  required: true,
-  value: new URLSearchParams(location.search).get('token') ?? '',
-});
 const submit = h('button', {
   type: 'submit',
   class: 'admin-btn',
   text: 'Save and open administration',
 });
 
-form.append(
-  field('Setup token', token, 'From the server’s log.'),
-  breakglass,
-  methods,
-  entra,
-  local,
-  ibmi,
-  h('div', { class: 'setup-actions' }, submit),
-);
+form.append(breakglass, methods, entra, local, ibmi, h('div', { class: 'setup-actions' }, submit));
 
 function selected(): Method {
   const checked = form.querySelector<HTMLInputElement>('input[name="method"]:checked');
@@ -221,7 +209,7 @@ function value(name: string): string {
 
 function body(): Record<string, unknown> {
   const method = selected();
-  const base = { token: value('token'), breakglassPassword: value('breakglassPassword'), method };
+  const base = { breakglassPassword: value('breakglassPassword'), method };
   if (method === 'entra')
     return {
       ...base,
@@ -256,8 +244,6 @@ function body(): Record<string, unknown> {
 
 /** The first problem with what's typed, as a message and the field to point at, or null. */
 function checkLocally(): { field: string; text: string } | null {
-  if (!value('token'))
-    return { field: 'token', text: 'Enter the setup token from the server’s log.' };
   if (value('breakglassPassword') !== value('breakglassConfirm'))
     return { field: 'breakglassConfirm', text: 'The breakglass passwords don’t match.' };
   if (selected() === 'local' && value('local.password') !== value('local.passwordConfirm'))

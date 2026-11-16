@@ -138,21 +138,6 @@ public sealed class SignInConfig(
 }
 
 /// <summary>
-/// The one-time token that first-run setup needs, so that whoever finds a new server first
-/// can't claim it: it is in the server's log (and can be set as Setup__Token), nowhere else.
-/// </summary>
-public sealed class SetupToken(string? configured)
-{
-    public string Value { get; } = configured?.Trim() is { Length: >= 16 } given
-        ? given
-        : Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
-
-    public bool Matches(string? given) =>
-        given is not null && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
-            System.Text.Encoding.UTF8.GetBytes(given.Trim()), System.Text.Encoding.UTF8.GetBytes(Value));
-}
-
-/// <summary>
 /// Slows password guessing against local accounts and the breakglass administrator: after
 /// five wrong passwords for a name, that name is locked for five minutes on this node. (An
 /// IBM i counts wrong passwords itself, and disables the profile: QMAXSIGN.)

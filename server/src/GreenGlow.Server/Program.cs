@@ -216,6 +216,7 @@ app.UseCluster();
 app.UsePublicUrl(server);
 app.UseSecurityHeaders();
 app.UseWebSockets();
+app.UseSetupPage();
 app.UseBuiltApp(server.StaticDir);
 app.UseAuthentication();
 app.UseAuthorization();

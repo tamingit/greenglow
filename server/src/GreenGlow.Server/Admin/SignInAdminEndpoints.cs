@@ -35,7 +35,7 @@ public static class SignInAdminEndpoints
             SettingsStore settings, UserStore users, CredentialSeal seal, PasswordLogin.Services services) =>
         {
             var before = config.Mode;
-            var outcome = await setup.ChooseAsync(choice with { Token = null }, initial: false, context.RequestAborted);
+            var outcome = await setup.ChooseAsync(choice, initial: false, context.RequestAborted);
             if (outcome.Problem is not null) return outcome.Problem;
             var me = CurrentUser.From(context.User)!;
             await PasswordLogin.LogAsync(context, services, me.Upn, me.Id, "",
