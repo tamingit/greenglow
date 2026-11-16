@@ -67,7 +67,7 @@ public static class AuthSetup
     /// Entra__* variables. Demo mode is its own guard: it never relaxes the other two. With none
     /// of them, the method is the one an administrator chose (<see cref="SignInConfig"/>): Entra
     /// ID, local accounts or IBM i sign-in; until one is chosen the server only offers first-run
-    /// setup, which needs the setup token from its log.
+    /// setup.
     /// </summary>
     public static SignInEnvironment AddGreenGlowAuth(this WebApplicationBuilder builder, EntraOptions entra, AuthOptions auth, DemoOptions demo)
     {
@@ -174,7 +174,6 @@ public static class AuthSetup
         builder.Services.AddSingleton<SignInConfig>();
         builder.Services.AddSingleton<SignInThrottle>();
         builder.Services.AddSingleton<SignInSetup>();
-        builder.Services.AddSingleton(new SetupToken(builder.Configuration["Setup:Token"]));
         builder.Services.AddSingleton(auth);
         return signIn;
     }

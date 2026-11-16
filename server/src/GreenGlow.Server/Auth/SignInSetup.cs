@@ -27,7 +27,7 @@ public sealed record LocalChoice(string? User, string? Name, string? Password);
 public sealed record IbmChoice(string? Connection, ConnectionEndpoints.ConnectionRequest? NewConnection, string? User, string? Password);
 
 /// <summary>POST /auth/setup, and PUT /api/admin/signin (without the token).</summary>
-public sealed record SignInChoice(string? Token, string? BreakglassPassword, string? Method, EntraChoice? Entra, LocalChoice? Local,
+public sealed record SignInChoice(string? BreakglassPassword, string? Method, EntraChoice? Entra, LocalChoice? Local,
     IbmChoice? Ibmi);
 
 /// <summary>
@@ -287,24 +287,36 @@ public sealed class SeedRunner(IReadOnlyList<HostConnection> seed, IDbContextFac
 }
 
 /// <summary>
-/// First-run setup: GET /auth/setup says whether it is needed; POST /auth/setup does it, with
-/// the setup token from the server's log. After it, the server answers 409: later changes are
-/// an administrator's, on the admin page.
+/// First-run setup: GET /auth/setup says whether it is needed; POST /auth/setup does it. After
+/// it, the server answers 409: later changes are an administrator's, on the admin page.
 /// </summary>
 public static class SetupEndpoints
 {
+    /// <summary>
+    /// The setup page exists only while setup is needed: once the server is set up, /setup.html
+    /// answers 404, whatever the static files hold.
+    /// </summary>
+    public static void UseSetupPage(this WebApplication app) =>
+        app.Use((context, next) =>
+        {
+            if (context.Request.Path.Equals(AuthSetup.SetupPage, StringComparison.OrdinalIgnoreCase)
+                && context.RequestServices.GetRequiredService<SignInConfig>().Mode != SignInMode.Setup)
+            {
+                context.Response.StatusCode = StatusCodes.Status404NotFound;
+                return Task.CompletedTask;
+            }
+            return next(context);
+        });
+
     public static void MapSetup(this WebApplication app)
     {
         app.MapGet("/auth/setup", (SignInConfig config) => Results.Json(new { needed = config.Mode == SignInMode.Setup }));
 
         app.MapPost("/auth/setup", async (SignInChoice choice, HttpContext context, SignInConfig config, SignInSetup setup,
-            SetupToken token, UserStore users, PasswordLogin.Services services) =>
+            UserStore users, PasswordLogin.Services services) =>
         {
             if (config.Mode != SignInMode.Setup)
                 return PasswordLogin.Refused(StatusCodes.Status409Conflict, "already-set-up", "This server is already set up. Sign in to change it.");
-            if (!token.Matches(choice.Token))
-                return PasswordLogin.Refused(StatusCodes.Status403Forbidden, "token",
-                    "That isn't the setup token. It is in the server's log, on the line that says the server is not set up.");
             var outcome = await setup.ChooseAsync(choice, initial: true, context.RequestAborted);
             if (outcome.Problem is not null) return outcome.Problem;
             var admin = outcome.SignInAs!;
@@ -318,9 +330,8 @@ public static class SetupEndpoints
     /// <summary>At start: says in the log how to set the server up, with the token.</summary>
     public static void AnnounceSetup(this WebApplication app, ServerOptions server)
     {
-        var token = app.Services.GetRequiredService<SetupToken>();
         app.Logger.LogWarning(
-            "GreenGlow is not set up: nobody can sign in yet. Open {Url}{Page}?token={Token} to choose how people sign in",
-            server.PublicUrl.TrimEnd('/'), AuthSetup.SetupPage, token.Value);
+            "GreenGlow is not set up: nobody can sign in yet. Open {Url}{Page} to choose how people sign in",
+            server.PublicUrl.TrimEnd('/'), AuthSetup.SetupPage);
     }
 }

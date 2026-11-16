@@ -28,7 +28,7 @@ Nothing needs configuring before the first run. Start the container, open the se
 
 ```bash
 docker compose up --build
-docker compose logs greenglow    # the line that says GreenGlow is not set up has the link and token
+docker compose logs greenglow    # the line that says GreenGlow is not set up has the link
 ```
 
 Setup asks for a breakglass password and the sign-in method: Microsoft Entra ID, local accounts, or IBM i user profiles (checked on the IBM i you name, which becomes the first administrator). After that, add IBM i systems on the admin page, and the server runs with no `.env` or `config/` file at all. The sections below are for development and for settings you want in files.

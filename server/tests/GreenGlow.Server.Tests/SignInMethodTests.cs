@@ -17,7 +17,6 @@ namespace GreenGlow.Server.Tests;
 /// </summary>
 public sealed class SignInMethodTests
 {
-    private const string Token = "test-setup-token-0123456789";
     private const string Breakglass = "breakglass placeholder 1";
     private const string AdminPassword = "local admin placeholder";
 
@@ -27,7 +26,6 @@ public sealed class SignInMethodTests
         {
             ["Server:PublicUrl"] = T.Origin,
             ["Auth:DevLogin"] = "false",
-            ["Setup:Token"] = Token,
         };
         foreach (var (key, value) in extra) settings[key] = value;
         return new RelayFactory(settings);
@@ -50,9 +48,8 @@ public sealed class SignInMethodTests
     private static async Task<JsonElement> Json(HttpResponseMessage response) =>
         await response.Content.ReadAsStringAsync(T.Token()) is { Length: > 0 } text ? JsonSerializer.Deserialize<JsonElement>(text) : default;
 
-    private static object LocalSetup(string token = Token) => new
+    private static object LocalSetup() => new
     {
-        token,
         breakglassPassword = Breakglass,
         method = "local",
         local = new { user = "admin", name = "Local Admin", password = AdminPassword },
@@ -84,18 +81,24 @@ public sealed class SignInMethodTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/me")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/auth/password", new { user = "admin", password = "x" })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.PostAsJsonAsync("/auth/breakglass", new { password = Breakglass })).StatusCode);
-        // The log says how to set it up, with the token.
-        Assert.Contains(factory.Logs.Entries, e => e.Message.Contains("is not set up") && e.Message.Contains(Token));
+        // The log says how to set it up.
+        Assert.Contains(factory.Logs.Entries, e => e.Message.Contains("is not set up"));
     }
 
     [Fact]
-    public async Task SetupNeedsTheTokenFromTheLog()
+    public async Task TheSetupPageIsGoneOnceTheServerIsSetUp()
+    {
+        using var factory = Factory();
+        await SetUpLocalAsync(factory);
+        Assert.Equal(HttpStatusCode.NotFound, (await factory.CreateClient().GetAsync("/setup.html")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await factory.CreateClient().GetAsync("/Setup.html")).StatusCode);
+    }
+
+    [Fact]
+    public async Task SetupNeedsNoTokenButStillNeedsAnAllowedOrigin()
     {
         using var factory = Factory();
         var client = Client(factory);
-        var refused = await client.PostAsJsonAsync("/auth/setup", LocalSetup("not-the-token"), T.Token());
-        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
-        Assert.Null(Cookie(refused));
         Assert.True((await Json(await client.GetAsync("/auth/setup"))).GetProperty("needed").GetBoolean());
 
         using var noOrigin = factory.CreateClient();
@@ -117,7 +120,6 @@ public sealed class SignInMethodTests
         using var factory = Factory();
         var client = Client(factory);
         var request = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(body)!;
-        request["token"] = JsonSerializer.SerializeToElement(Token);
         var refused = await client.PostAsJsonAsync("/auth/setup", request, T.Token());
         Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
         Assert.Equal(field, (await Json(refused)).GetProperty("error").GetString());
@@ -281,7 +283,6 @@ public sealed class SignInMethodTests
 
     private static object IbmSetup(string user = "PRTUSER", string password = "Secret12", bool usePortMapper = false) => new
     {
-        token = Token,
         breakglassPassword = Breakglass,
         method = "ibmi",
         ibmi = new
@@ -428,7 +429,6 @@ public sealed class SignInMethodTests
 
     private static object EntraSetup() => new
     {
-        token = Token,
         breakglassPassword = Breakglass,
         method = "entra",
         entra = new
