@@ -29,7 +29,7 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
   - **Disconnected card.** It lists the user's open sessions to join, take over or end.
   - **Sharing.** An owner can share a session with named people, view-only or full access, and change or remove anyone's access at once. Shared people can view a session only while its owner is in it.
   - **Live updates.** The server pushes each page its user's session list over `/ws/user` (`UserFeed`, `userfeed.ts`). The page doesn't poll.
-- **Side panels.** They pull out from tabs on the window's right edge, one at a time (`side.css`): Keys (Alt+K), Share (Alt+S, `sharing.ts`), Macros (Alt+M) and Printer (Alt+P).
+- **Side panels.** They pull out from tabs on the window's right edge, one at a time (`side.css`): Keys (Alt+K), Share (Alt+S, `sharing.ts`), Macros (Alt+M), Printer (Alt+P) and Files (Alt+I, `files.ts`).
 - **Session tabs.** Each session has a tab in the top bar.
   - It is named after its screen's title, and coloured for its system.
   - A lock shows the link: green for verified TLS, yellow for TLS without a check, red for plain Telnet.
@@ -61,6 +61,7 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
 - **Printer output.** It is in `printer.ts` and `server/src/GreenGlow.Server/Printing/`.
   - The user signs on to the IBM i's Network Print server with their own IBM i user and password.
   - They see their own spooled files and open one as a PDF. The server renders SCS, passes PDFs through and refuses AFP.
+- **Files.** The Files panel downloads a file from the IFS by path (`files.ts`, `server/src/GreenGlow.Server/Files/`), through the IBM i's file server (`HostServers/FileServer.cs`; the port mapper first, 8473/9473 as the fallback). The user signs on with a saved login or their own IBM i user and password, as in the Printer panel. Upload and folder listing aren't built yet.
 - **Help.** The help page (`help.html`) holds the user guide. Only administrators can open the administrator guide (`/api/admin/guide`, from `server/src/GreenGlow.Server/Help/`). `npm run screenshots` takes the screenshots against the fake IBM i.
 - **Public demo.** Demo mode (`Demo__Enabled`) lets anyone sign in as a guest and use only demo systems: the fake IBM i, and PUB400 once it is enabled. See [Demo mode](#demo-mode).
 
@@ -331,7 +332,7 @@ Recordings and test screens:
     - are for test systems only, never production;
     - are never logged, recorded or written to disk by the tests;
     - are never committed.
-  - The IBM i password a user types in the Printer panel is used only to build the password substitute for the Network Print server, then dropped. It is never:
+  - The IBM i password a user types in the Printer or Files panel is used only to build the password substitute for the Network Print server or the file server, then dropped. It is never:
     - stored;
     - logged;
     - put in the database or the connection log;

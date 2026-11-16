@@ -12,6 +12,7 @@ using GreenGlow.Server.Data;
 using GreenGlow.Server.HostServers;
 using GreenGlow.Server.Logins;
 using GreenGlow.Server.People;
+using GreenGlow.Server.Files;
 using GreenGlow.Server.Printing;
 using GreenGlow.Server.Relay;
 using GreenGlow.Server.Sessions;
@@ -92,6 +93,8 @@ var hostServers = builder.Environment.IsProduction()
 builder.Services.AddSingleton(hostServers);
 builder.Services.AddSingleton<HostEndpoints>();
 builder.Services.AddSingleton<PrintSessions>();
+builder.Services.AddSingleton(builder.Configuration.GetSection("Files").Get<FilesOptions>() ?? new FilesOptions());
+builder.Services.AddSingleton<FileSessions>();
 var entra = builder.Configuration.GetSection("Entra").Get<EntraOptions>() ?? new EntraOptions();
 var signIn = builder.AddGreenGlowAuth(entra, builder.Configuration.GetSection("Auth").Get<AuthOptions>() ?? new AuthOptions(), demo);
 if (demo.Enabled)
@@ -298,6 +301,7 @@ app.MapSessionEndpoints(api);
 app.Map("/ws/user", UserFeed.AttachAsync).RequireAuthorization();
 api.MapMacroEndpoints(sharing: !demo.Enabled);
 api.MapPrinterEndpoints();
+api.MapFileEndpoints();
 // Sharing, the directory and administration need real people: none of them in demo mode.
 if (!demo.Enabled)
 {
@@ -311,6 +315,8 @@ app.Lifetime.ApplicationStopping.Register(() =>
     app.Services.GetRequiredService<SessionManager>().DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(10)));
 app.Lifetime.ApplicationStopping.Register(() =>
     app.Services.GetRequiredService<PrintSessions>().StopAsync().Wait(TimeSpan.FromSeconds(10)));
+app.Lifetime.ApplicationStopping.Register(() =>
+    app.Services.GetRequiredService<FileSessions>().StopAsync().Wait(TimeSpan.FromSeconds(10)));
 
 await app.RunAsync();
 return 0;

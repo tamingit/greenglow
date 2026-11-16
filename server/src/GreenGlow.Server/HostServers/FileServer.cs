@@ -62,6 +62,9 @@ public sealed class FileServerClient : IAsyncDisposable
 
     public int DatastreamLevel { get; }
 
+    /// <summary>The IBM i user signed on, upper case.</summary>
+    public string User => _host.User;
+
     /// <summary>The CCSID the server takes path names in (1200 or 13488, both UTF-16 big-endian here).</summary>
     public int Ccsid { get; }
 
@@ -120,16 +123,24 @@ public sealed class FileServerClient : IAsyncDisposable
     }
 
     /// <summary>Copies a whole file into `destination`, closing it on the IBM i whatever happens. Returns the bytes copied.</summary>
-    public async Task<long> DownloadAsync(string path, Stream destination, CancellationToken cancel)
+    public async Task<long> DownloadAsync(string path, Stream destination, CancellationToken cancel) =>
+        await CopyToAsync(await OpenForReadAsync(path, cancel), destination, limit: null, cancel);
+
+    /// <summary>
+    /// Copies an opened file into `destination` until its end, or until `limit` bytes (the size
+    /// the open reported, when the copy promised that many), then closes it on the IBM i, whatever
+    /// happens. A failed write closes the file too, so the connection stays in step with its replies.
+    /// </summary>
+    public async Task<long> CopyToAsync(OpenedFile file, Stream destination, long? limit, CancellationToken cancel)
     {
-        var file = await OpenForReadAsync(path, cancel);
         long copied = 0;
-        while (true)
+        while (limit is null || copied < limit)
         {
             byte[] block;
             try
             {
-                block = await ReadAsync(file.Handle, copied, ReadBlock, cancel);
+                var ask = limit is { } most ? (int)Math.Min(ReadBlock, most - copied) : ReadBlock;
+                block = await ReadAsync(file.Handle, copied, ask, cancel);
                 if (block.Length > 0) await destination.WriteAsync(block, cancel);
             }
             catch

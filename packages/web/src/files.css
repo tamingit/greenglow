@@ -1,0 +1,26 @@
+/* The Files panel: the Printer panel's look (printer.css), plus saved logins, the two
+   checkboxes and the recent paths. */
+
+.files-logins {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.files-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.files-recent {
+  margin-top: 1rem;
+}
+
+.files-again {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}

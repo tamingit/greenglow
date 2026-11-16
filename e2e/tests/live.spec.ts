@@ -134,4 +134,53 @@ test.describe('live test system', () => {
     await signOff(page);
     await expect(viewer.locator('#terminal .offline')).toBeVisible({ timeout: 30_000 });
   });
+
+  test('the Files panel downloads a system file from the IFS, and says why another fails', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await signIn(page, LIVE_UPN);
+    await signOnLive(page);
+
+    await page.keyboard.press('Alt+i');
+    const panel = page.locator('#files-panel');
+    await expect(panel).toBeVisible();
+    // The session's IBM i user is offered; the password is set from inside the page.
+    await expect(panel.getByLabel('IBM i user')).toHaveValue(user!.toUpperCase());
+    await panel.getByLabel('Password').evaluate((box: HTMLInputElement, secret) => {
+      box.value = secret ?? '';
+    }, password);
+    await panel.getByRole('button', { name: 'Sign on', exact: true }).click();
+    await expect(panel).toContainText(`Signed on as ${user!.toUpperCase()}`, { timeout: 30_000 });
+    expect(await panel.getByLabel('Password').count()).toBe(0);
+
+    // A PASE program every IBM i with PASE has: it downloads with its own name.
+    await panel.getByLabel('Path of a file in the IFS').fill('/QOpenSys/usr/bin/ls');
+    const downloading = page.waitForEvent('download');
+    await panel.getByRole('button', { name: 'Download' }).click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toBe('ls');
+    const saved = await download.path();
+    const { readFile } = await import('node:fs/promises');
+    const bytes = await readFile(saved);
+    expect(bytes.length).toBeGreaterThan(1000);
+    expect([...bytes.subarray(0, 2)]).toEqual([0x01, 0xf7]);
+    await expect(panel.getByRole('status')).toContainText('Downloading ls');
+    await expect(panel.getByRole('list', { name: 'Recent downloads' })).toContainText(
+      '/QOpenSys/usr/bin/ls',
+    );
+
+    // A path that isn't there says so in the panel; nothing downloads.
+    await panel.getByLabel('Path of a file in the IFS').fill('/greenglow-no-such-folder/x.txt');
+    await panel.getByRole('button', { name: 'Download' }).click();
+    await expect(panel.getByRole('status')).toHaveText('There is no such folder.');
+
+    await panel.getByRole('button', { name: 'Sign off' }).click();
+    await expect(panel.getByLabel('IBM i user')).toBeVisible();
+    await page.keyboard.press('Escape');
+    // Ends the Telnet session from the page, whatever screen the IBM i shows.
+    await disconnect(page);
+    await page.getByRole('alertdialog').getByRole('button', { name: 'End session' }).click();
+    await expect(page.locator('#terminal .offline')).toBeVisible({ timeout: 30_000 });
+  });
 });
