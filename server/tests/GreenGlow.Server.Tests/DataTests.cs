@@ -82,6 +82,20 @@ public sealed class DataTests
         }
     }
 
+    [Fact]
+    public async Task AMissingSeedFileIsSkippedAndTheServerStarts()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), "greenglow-missing-" + Guid.NewGuid().ToString("N"), "connections.json");
+        using var factory = new RelayFactory(new Dictionary<string, string?>
+        {
+            ["Server:PublicUrl"] = T.Origin,
+            ["Seed:ConnectionsFile"] = missing,
+        });
+        _ = factory.Server;
+        await using var db = Db(factory);
+        Assert.Empty(await db.Connections.ToListAsync());
+    }
+
     [Theory]
     [InlineData("""{"connections":[{"name":"a","url":"tcp://h","maxSessionsPerUser":0}]}""", "maxSessionsPerUser")]
     [InlineData("""{"connections":[{"name":"a","url":"tcp://h","maxSessionsPerUser":10}]}""", "maxSessionsPerUser")]
