@@ -24,6 +24,9 @@ public static class RateLimiting
     /// <summary>New demo guests (POST /auth/guest), per client address per hour.</summary>
     public const string Guest = "guest";
 
+    /// <summary>Password sign-ins and first-run setup (POST /auth/password and the like), per client address per minute.</summary>
+    public const string Password = "password";
+
     public static IServiceCollection AddGreenGlowRateLimiter(this IServiceCollection services, RateLimitOptions options, DemoOptions demo)
     {
         services.AddRateLimiter(limiter =>
@@ -38,6 +41,19 @@ public static class RateLimiting
             };
             limiter.AddPolicy(Directory, context => Window(context, options, options.DirectoryPerMinute));
             limiter.AddPolicy(SignOn, context => Window(context, options, options.SignOnPerMinute));
+            limiter.AddPolicy(Password, context =>
+            {
+                // By address: whoever is trying a password isn't signed in yet.
+                var key = ClientAddress.Of(context) ?? "anonymous";
+                return options.Enabled
+                    ? RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = Math.Max(1, options.PasswordPerMinute),
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                    })
+                    : RateLimitPartition.GetNoLimiter(key);
+            });
             limiter.AddPolicy(Guest, context =>
             {
                 // Always by address: a visitor starting a demo isn't signed in yet.

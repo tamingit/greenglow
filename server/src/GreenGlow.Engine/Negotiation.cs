@@ -3,9 +3,20 @@
 
 namespace GreenGlow.Engine;
 
+/// <summary>
+/// Signing the session on during negotiation, in place of the sign-on screen (RFC 4777 section
+/// 5, "bypass sign-on"; the IBM i allows it when QRMTSIGN is *VERIFY). The password never
+/// reaches the engine: `Substitute` is given the IBM i's random seed and answers with the
+/// client's own seed and the password substitute made from both, good for this one sign-on,
+/// or null to sign on at the sign-on screen after all.
+/// </summary>
+/// <param name="User">The IBM i user profile, upper case.</param>
+public sealed record AutoSignOn(string User, Func<byte[], (byte[] ClientSeed, byte[] Substitute)?> Substitute);
+
 /// <param name="TerminalType">Sent as TERMINAL-TYPE IS, for example IBM-3477-FC.</param>
 /// <param name="DeviceName">Display device to request. Without one the IBM i assigns a QPADEVnnnn device.</param>
-public sealed record NegotiationConfig(string TerminalType, string? DeviceName = null);
+/// <param name="SignOn">Sign on during negotiation, when the IBM i sends a seed for it.</param>
+public sealed record NegotiationConfig(string TerminalType, string? DeviceName = null, AutoSignOn? SignOn = null);
 
 public abstract record NegotiationEvent
 {
@@ -39,6 +50,7 @@ public sealed class TelnetNegotiator
     private const byte Is = 0;
     private const byte SendVerb = 1;
     // NEW-ENVIRON codes (RFC 1572).
+    private const byte Var = 0;
     private const byte Value = 1;
     private const byte Esc = 2;
     private const byte UserVar = 3;
@@ -56,6 +68,9 @@ public sealed class TelnetNegotiator
     private static readonly HashSet<int> RemoteOptions = [TelnetOption.Binary, TelnetOption.EndOfRecord];
 
     private static readonly byte[] DevnameRequest = [SendVerb, UserVar, .. Ascii("DEVNAME")];
+
+    /// <summary>In the IBM i's SEND list, its random seed follows this name directly (RFC 4777 section 5).</summary>
+    private static readonly byte[] SeedVariable = [UserVar, .. Ascii("IBMRSEED")];
 
     private readonly NegotiationConfig _config;
 
@@ -75,6 +90,9 @@ public sealed class TelnetNegotiator
     }
 
     public bool IsReady { get; private set; }
+
+    /// <summary>A user and password substitute went to the IBM i: the session signs on without the sign-on screen, or is refused.</summary>
+    public bool SignOnSent { get; private set; }
 
     /// <summary>Up to 10 characters: A–Z, 0–9, $, #, @ and _, not starting with a digit or _ (RFC 4777).</summary>
     public static bool IsValidDeviceName(string name)
@@ -172,9 +190,40 @@ public sealed class TelnetNegotiator
                 result.Send.Add(EncodeEnvironment([("DEVNAME", deviceName)]));
                 return;
             }
-            result.Send.Add(EncodeEnvironment(Variables()));
+            List<(byte Kind, byte[] Name, byte[] Value)> variables = [];
+            // Once only: a second substitute would be a second sign-on attempt.
+            if (!SignOnSent && _config.SignOn is { } signOn && ServerSeed(data) is { } seed
+                && signOn.Substitute(seed) is var (clientSeed, substitute))
+            {
+                variables.Add((Var, Ascii("USER"), Ascii(signOn.User)));
+                variables.Add((UserVar, Ascii("IBMRSEED"), clientSeed));
+                variables.Add((UserVar, Ascii("IBMSUBSPW"), substitute));
+                SignOnSent = true;
+            }
+            variables.AddRange(Variables().Select(v => (UserVar, Ascii(v.Name), Ascii(v.Value))));
+            result.Send.Add(EncodeEnvironment(variables));
             _environmentSent = true;
         }
+    }
+
+    /// <summary>
+    /// The IBM i's 8-byte random seed from a SEND list (USERVAR "IBMRSEED" and the seed, with
+    /// bytes that look like NEW-ENVIRON codes after an ESC), or null: no seed, or all zeros,
+    /// which is how an IBM i says it doesn't take password substitutes.
+    /// </summary>
+    internal static byte[]? ServerSeed(byte[] data)
+    {
+        var at = data.AsSpan().IndexOf(SeedVariable);
+        if (at < 0) return null;
+        var seed = new byte[8];
+        var i = at + SeedVariable.Length;
+        for (var n = 0; n < seed.Length; n++)
+        {
+            if (i < data.Length && data[i] == Esc) i++;
+            if (i >= data.Length) return null;
+            seed[n] = data[i++];
+        }
+        return seed.All(b => b == 0) ? null : seed;
     }
 
     private List<(string Name, string Value)> Variables()
@@ -193,15 +242,19 @@ public sealed class TelnetNegotiator
     private static bool IsDeviceNameRequest(byte[] data) => data.AsSpan().SequenceEqual(DevnameRequest);
 
     /// <summary>NEW-ENVIRON IS with each variable as USERVAR name VALUE value (RFC 1572, RFC 4777).</summary>
-    public static byte[] EncodeEnvironment(IEnumerable<(string Name, string Value)> variables)
+    public static byte[] EncodeEnvironment(IEnumerable<(string Name, string Value)> variables) =>
+        EncodeEnvironment(variables.Select(v => (UserVar, Ascii(v.Name), Ascii(v.Value))));
+
+    /// <summary>The same, with each variable's kind (VAR for the well-known USER, else USERVAR) and a value of any bytes.</summary>
+    private static byte[] EncodeEnvironment(IEnumerable<(byte Kind, byte[] Name, byte[] Value)> variables)
     {
         var bytes = new List<byte> { Is };
-        foreach (var (name, value) in variables)
+        foreach (var (kind, name, value) in variables)
         {
-            bytes.Add(UserVar);
-            bytes.AddRange(EscapeEnvironment(Ascii(name)));
+            bytes.Add(kind);
+            bytes.AddRange(EscapeEnvironment(name));
             bytes.Add(Value);
-            bytes.AddRange(EscapeEnvironment(Ascii(value)));
+            bytes.AddRange(EscapeEnvironment(value));
         }
         return Telnet.EncodeSubnegotiation(TelnetOption.NewEnviron, bytes.ToArray());
     }

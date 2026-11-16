@@ -21,7 +21,7 @@ public sealed class SyncModel
     [
         typeof(Setting), typeof(AppUser), typeof(SigningKey), typeof(HostConnection), typeof(ConnectionGrant),
         typeof(UserConnectionColor), typeof(SessionShare), typeof(ShareRecipient), typeof(Macro), typeof(MacroShare),
-        typeof(MacroKey),
+        typeof(MacroKey), typeof(IbmLogin),
     ];
 
     private static readonly Lock CacheLock = new();

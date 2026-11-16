@@ -94,11 +94,27 @@ public sealed class AuthTests
         Assert.Equal(expected, AuthSetup.SafeReturn(asked));
 
     [Fact]
-    public void TheDevLoginIsRefusedInProduction()
+    public async Task TheDevLoginIsIgnoredInProduction()
     {
+        // Production with no Entra ID starts, but only to be set up: the dev login isn't there.
         using var factory = new ProductionFactory(new Dictionary<string, string?> { ["Auth:DevLogin"] = "true" });
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/auth/dev")).StatusCode);
+        var signIn = await client.GetAsync("/auth/signin");
+        Assert.Equal("/setup.html", signIn.Headers.Location?.OriginalString);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("/api/me")).StatusCode);
+    }
+
+    [Fact]
+    public void EntraIdWithoutItsSecretIsRefused()
+    {
+        using var factory = new ProductionFactory(new Dictionary<string, string?>
+        {
+            ["Entra:TenantId"] = "00000000-0000-0000-0000-000000000001",
+            ["Entra:ClientId"] = "00000000-0000-0000-0000-000000000002",
+        });
         var error = Assert.ThrowsAny<Exception>(() => factory.Server);
-        Assert.Contains("Entra ID is not configured", (error as ConfigException ?? error.InnerException)?.Message ?? error.Message);
+        Assert.Contains("half configured", (error as ConfigException ?? error.InnerException)?.Message ?? error.Message);
     }
 
     [Fact]

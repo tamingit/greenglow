@@ -44,6 +44,9 @@ public sealed class SeedConnection
 
     public bool Enabled { get; set; } = true;
 
+    /// <summary>Ask the IBM i's port mapper (449) where its host servers listen, instead of IBM's default ports.</summary>
+    public bool UsePortMapper { get; set; }
+
     /// <summary>The system's colour on the page, #rrggbb; none if missing.</summary>
     public string? Color { get; set; }
 
@@ -147,6 +150,7 @@ public static class ConnectionSeed
                 IsTest = seed.IsTest,
                 IsDemo = seed.IsDemo,
                 Enabled = seed.Enabled,
+                UsePortMapper = seed.UsePortMapper,
                 Color = color,
             };
             foreach (var access in seed.Access)
@@ -234,6 +238,7 @@ public static class ConnectionSeed
         foreach (var connection in stored.Where(c => seed.All(s => s.Name != c.Name)))
         {
             db.UserColors.RemoveRange(await db.UserColors.Where(c => c.ConnectionId == connection.Id).ToListAsync());
+            db.IbmLogins.RemoveRange(await db.IbmLogins.Where(l => l.ConnectionId == connection.Id).ToListAsync());
             db.Connections.Remove(connection);
             removed.Add(connection.Name);
         }

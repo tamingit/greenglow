@@ -54,6 +54,12 @@ public sealed class RateLimitOptions
 
     /// <summary>Printer sign-on attempts one user may make per minute (/api/printer/*/signon).</summary>
     public int SignOnPerMinute { get; set; } = 10;
+
+    /// <summary>
+    /// Password sign-ins one client address may try per minute (local accounts, IBM i sign-in,
+    /// the breakglass administrator, first-run setup).
+    /// </summary>
+    public int PasswordPerMinute { get; set; } = 10;
 }
 
 /// <summary>

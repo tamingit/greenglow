@@ -73,6 +73,33 @@ public sealed class SettingsStore(IDbContextFactory<GreenGlowDb> dbs, SessionDef
         lock (_lock) _saved = null;
     }
 
+    /// <summary>A setting kept as text (the sign-in method and its details), or null when it isn't set.</summary>
+    public string? Text(string key) => Saved().GetValueOrDefault(key);
+
+    /// <summary>Saves text settings in one write; a null value removes that setting.</summary>
+    public async Task SetTextAsync(IReadOnlyDictionary<string, string?> values)
+    {
+        await using var db = await dbs.CreateDbContextAsync();
+        Apply(db, values);
+        await db.SaveChangesAsync();
+        lock (_lock) _saved = null;
+    }
+
+    /// <summary>The same, on a context the caller saves (with other rows, in one write), then calls Forget.</summary>
+    public static void Apply(GreenGlowDb db, IReadOnlyDictionary<string, string?> values)
+    {
+        foreach (var (key, value) in values)
+        {
+            var row = db.Settings.Local.FirstOrDefault(s => s.Key == key) ?? db.Settings.Find(key);
+            if (value is null)
+            {
+                if (row is not null) db.Settings.Remove(row);
+            }
+            else if (row is null) db.Settings.Add(new Setting { Key = key, Value = value });
+            else row.Value = value;
+        }
+    }
+
     /// <summary>Forgets the cached values, when another node's changes were applied.</summary>
     public void Forget()
     {

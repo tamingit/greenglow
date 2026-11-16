@@ -32,7 +32,7 @@ public static class LogEndpoints
             if (kind is not null)
             {
                 if (!Enum.TryParse<LogKind>(kind, ignoreCase: true, out var k))
-                    return Results.BadRequest(new { error = "kind", message = "kind is session, frontend, certificate, printer or node." });
+                    return Results.BadRequest(new { error = "kind", message = "kind is session, frontend, certificate, printer, node or signin." });
                 rows = rows.Where(r => r.Kind == k);
             }
             if (!string.IsNullOrWhiteSpace(q))

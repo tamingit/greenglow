@@ -13,6 +13,9 @@ public sealed record ConnectionConfig
 
     public string? DeviceName { get; init; }
 
+    /// <summary>Sign on during negotiation instead of at the sign-on screen. Never with a recording.</summary>
+    public AutoSignOn? SignOn { get; init; }
+
     /// <summary>Record the session for offline replay (dev only).</summary>
     public RecordingOptions? Recording { get; init; }
 }
@@ -207,14 +210,21 @@ public sealed class Connection
         {
             throw new ArgumentException("A recording must blank nondisplay or all input", nameof(config));
         }
+        if (config is { Recording: not null, SignOn: not null })
+        {
+            throw new ArgumentException("A recorded session signs on at the sign-on screen, where input is blanked", nameof(config));
+        }
         Terminal = terminal;
         _deviceName = config.DeviceName;
-        _negotiator = new TelnetNegotiator(new NegotiationConfig(terminal.TerminalType, config.DeviceName));
+        _negotiator = new TelnetNegotiator(new NegotiationConfig(terminal.TerminalType, config.DeviceName, config.SignOn));
         _recording = config.Recording is { } options ? new SessionRecording(new Recorder(options.Now)) : null;
         _blank = config.Recording?.Blank ?? Blank.None;
     }
 
     public TerminalModel Terminal { get; }
+
+    /// <summary>A user and password substitute went to the IBM i during negotiation (see <see cref="AutoSignOn"/>).</summary>
+    public bool AutoSignOnSent => _negotiator.SignOnSent;
 
     /// <summary>The session recording, when the connection was created with `Recording`.</summary>
     public SessionRecording? Recording => _recording;

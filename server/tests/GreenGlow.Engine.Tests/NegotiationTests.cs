@@ -176,4 +176,92 @@ public class TelnetNegotiatorTests
     {
         Assert.False(TelnetNegotiator.IsValidDeviceName(name));
     }
+
+    // ---- Automatic sign-on (RFC 4777 section 5) ----
+
+    private const byte ENV_ESC = 2;
+
+    [Fact(DisplayName = "TelnetNegotiator: signs on with a substitute made from the IBM i's seed")]
+    public void SignsOnWithASubstitute()
+    {
+        byte[]? given = null;
+        // Both the client seed and the substitute hold bytes that look like NEW-ENVIRON codes.
+        var clientSeed = B(0x11, 0x00, 0x33, 0x44, 0x55, 0x66, 0x77, 0x03);
+        var substitute = B(0xa1, 0x01, 0xa3, 0xa4, 0x02, 0xa6, 0xa7, 0xff);
+        var session = new Exchange(new NegotiationConfig("IBM-3477-FC", "GGTEST001", new AutoSignOn("SOMEUSER", seed =>
+        {
+            given = seed;
+            return (clientSeed, substitute);
+        })));
+        session.Host(IAC, DO, NEW_ENVIRON);
+
+        // The seed's 0x01 arrives after an ESC, as RFC 1572 has it.
+        var (sent, _) = session.Host(
+            B(IAC, SB, NEW_ENVIRON, SEND, USERVAR, Ascii("IBMRSEED"), 0x9a, ENV_ESC, 0x01, 0x9c, 0x9d, 0x9e, 0x9f, 0xa0, 0xa1),
+            B(VAR, USERVAR, IAC, SE));
+
+        Assert.Equal(B(0x9a, 0x01, 0x9c, 0x9d, 0x9e, 0x9f, 0xa0, 0xa1), given);
+        Assert.True(session.Negotiator.SignOnSent);
+        Assert.Equal(
+            B(
+                B(IAC, SB, NEW_ENVIRON, IS),
+                B(VAR, Ascii("USER"), VALUE, Ascii("SOMEUSER")),
+                B(USERVAR, Ascii("IBMRSEED"), VALUE, 0x11, ENV_ESC, 0x00, 0x33, 0x44, 0x55, 0x66, 0x77, ENV_ESC, 0x03),
+                // 0xff is doubled for Telnet as well.
+                B(USERVAR, Ascii("IBMSUBSPW"), VALUE, 0xa1, ENV_ESC, 0x01, 0xa3, 0xa4, ENV_ESC, 0x02, 0xa6, 0xa7, 0xff, 0xff),
+                Variable("DEVNAME", "GGTEST001"),
+                Variable("KBDTYPE", "USB"),
+                Variable("CODEPAGE", "37"),
+                Variable("CHARSET", "697"),
+                Variable("IBMSENDCONFREC", "YES"),
+                B(IAC, SE)),
+            sent);
+
+        // Asked again, the IBM i gets the variables but never a second substitute.
+        given = null;
+        var (again, _) = session.Host(
+            B(IAC, SB, NEW_ENVIRON, SEND, USERVAR, Ascii("IBMRSEED"), 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f, 0xa0, 0xa1),
+            B(VAR, USERVAR, IAC, SE));
+        Assert.Null(given);
+        Assert.DoesNotContain("IBMSUBSPW", System.Text.Encoding.Latin1.GetString(again));
+    }
+
+    [Theory(DisplayName = "TelnetNegotiator: without a usable seed the sign-on screen is used")]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void WithoutASeedNothingIsSent(bool zeroSeed, bool declined)
+    {
+        var asked = 0;
+        var session = new Exchange(new NegotiationConfig("IBM-3477-FC", "GGTEST001", new AutoSignOn("SOMEUSER", _ =>
+        {
+            asked++;
+            return declined ? null : (new byte[8], new byte[20]);
+        })));
+        session.Host(IAC, DO, NEW_ENVIRON);
+        var (sent, _) = declined
+            ? session.Host(B(IAC, SB, NEW_ENVIRON, SEND, USERVAR, Ascii("IBMRSEED"), 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f, 0xa0, 0xa1), B(VAR, USERVAR, IAC, SE))
+            : zeroSeed
+                ? session.Host(B(IAC, SB, NEW_ENVIRON, SEND, USERVAR, Ascii("IBMRSEED"), ENV_ESC, 0, ENV_ESC, 0, ENV_ESC, 0, ENV_ESC, 0),
+                    B(ENV_ESC, 0, ENV_ESC, 0, ENV_ESC, 0, ENV_ESC, 0, VAR, USERVAR, IAC, SE))
+                : session.Host(IAC, SB, NEW_ENVIRON, SEND, VAR, USERVAR, IAC, SE);
+
+        Assert.False(session.Negotiator.SignOnSent);
+        Assert.Equal(declined ? 1 : 0, asked);
+        var text = System.Text.Encoding.Latin1.GetString(sent);
+        Assert.DoesNotContain("USER\u0001SOMEUSER", text);
+        Assert.DoesNotContain("IBMSUBSPW", text);
+        Assert.Contains("DEVNAME", text);
+    }
+
+    [Fact(DisplayName = "Connection: a recorded session never signs on automatically")]
+    public void ARecordingRefusesAutomaticSignOn()
+    {
+        Assert.Throws<ArgumentException>(() => new Connection(new ConnectionConfig
+        {
+            TerminalType = "IBM-3477-FC",
+            SignOn = new AutoSignOn("SOMEUSER", _ => null),
+            Recording = new RecordingOptions(() => 0, Blank.Nondisplay),
+        }));
+    }
 }

@@ -26,7 +26,8 @@ public static class SessionEndpoints
     /// <summary>How long a browser has to answer the server's close frame.</summary>
     private static readonly TimeSpan CloseHandshakeTimeout = TimeSpan.FromSeconds(5);
 
-    public sealed record OpenRequest(string Target, bool Spare = false);
+    /// <param name="Login">One of the user's saved IBM i logins for the system, to sign the session on with.</param>
+    public sealed record OpenRequest(string Target, bool Spare = false, Guid? Login = null);
 
     public static void MapSessionEndpoints(this WebApplication app, RouteGroupBuilder api)
     {
@@ -38,15 +39,31 @@ public static class SessionEndpoints
             return Results.Json(new { sessions = await ListAsync(user, sessions, shares) });
         });
 
-        api.MapPost("/sessions", async (OpenRequest request, HttpContext context, Access access, SessionManager sessions) =>
+        api.MapPost("/sessions", async (OpenRequest request, HttpContext context, Access access, SessionManager sessions,
+            Logins.IbmLogins logins, Logins.AutoSignOns autoSignOns, Configuration.DemoOptions demo) =>
         {
             var user = CurrentUser.From(context.User)!;
             // A system this user may not use answers like one that doesn't exist.
             var target = await access.FindAsync(user, request.Target ?? "");
             if (target is null) return Results.NotFound(new { error = "unknown-target", message = "No such system." });
+            // With a saved login, the session signs on during negotiation (never by typing at
+            // the sign-on screen). When that can't be offered, the sign-on screen appears as usual.
+            Engine.AutoSignOn? signOn = null;
+            Action? refused = null;
+            if (request.Login is { } loginId && !demo.Enabled)
+            {
+                var login = await logins.CredentialsAsync(user.Id, target, loginId);
+                if (login is null) return Results.NotFound(new { error = "unknown-login", message = "That login isn't saved any more." });
+                if (login.Value.Password is not { } password)
+                    return Results.Conflict(new { error = "password-needed", message = $"Type the password for {login.Value.IbmUser}." });
+                var ibmUser = login.Value.IbmUser;
+                signOn = await autoSignOns.ForAsync(target, ibmUser, password, context.RequestAborted);
+                // A refused password is dropped at once, so it is never sent twice.
+                refused = () => _ = logins.RefusedAsync(user.Id, target, ibmUser);
+            }
             try
             {
-                var session = await sessions.CreateAsync(user, target, ClientAddress.Of(context), request.Spare);
+                var session = await sessions.CreateAsync(user, target, ClientAddress.Of(context), request.Spare, signOn, refused);
                 return Results.Json(Describe(session, FrontendRole.Owner), statusCode: StatusCodes.Status201Created);
             }
             catch (SessionRefusedException e)
