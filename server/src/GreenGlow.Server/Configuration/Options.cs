@@ -80,6 +80,13 @@ public sealed class DemoOptions
 }
 
 /// <summary>Printer output: the IBM i Network Print server.</summary>
+/// <summary>The Files panel (Files__*).</summary>
+public sealed class FilesOptions
+{
+    /// <summary>How long, in minutes, an unused file server sign-on lasts.</summary>
+    public int IdleMinutes { get; set; } = 15;
+}
+
 public sealed class PrinterOptions
 {
     /// <summary>How long a signed-on print session lasts without use.</summary>

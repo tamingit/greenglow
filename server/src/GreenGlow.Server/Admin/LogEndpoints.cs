@@ -32,7 +32,7 @@ public static class LogEndpoints
             if (kind is not null)
             {
                 if (!Enum.TryParse<LogKind>(kind, ignoreCase: true, out var k))
-                    return Results.BadRequest(new { error = "kind", message = "kind is session, frontend, certificate, printer, node or signin." });
+                    return Results.BadRequest(new { error = "kind", message = "kind is session, frontend, certificate, printer, files, node or signin." });
                 rows = rows.Where(r => r.Kind == k);
             }
             if (!string.IsNullOrWhiteSpace(q))
@@ -91,7 +91,7 @@ public static class LogEndpoints
                     current = r.EndedAt is null,
                     // For a current host session, what it shows now.
                     // A print session keeps its IBM i user; a host session shows it while it's live.
-                    ibmUser = r.Kind == LogKind.Printer ? r.IbmUser
+                    ibmUser = r.Kind is LogKind.Printer or LogKind.Files ? r.IbmUser
                         : r.Kind == LogKind.Session && live.TryGetValue(r.SessionId, out var s) ? s.IbmUser : null,
                     filesOpened = r.FilesOpened,
                     title = r.Kind == LogKind.Session && live.TryGetValue(r.SessionId, out var t) ? t.Title : null,

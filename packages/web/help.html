@@ -271,9 +271,11 @@
                 <tr>
                   <td>
                     <kbd>Alt</kbd>+<kbd>K</kbd>, <kbd>Alt</kbd>+<kbd>S</kbd>,
-                    <kbd>Alt</kbd>+<kbd>M</kbd>, <kbd>Alt</kbd>+<kbd>P</kbd>
+                    <kbd>Alt</kbd>+<kbd>M</kbd>, <kbd>Alt</kbd>+<kbd>P</kbd>, <kbd>Alt</kbd>+<kbd
+                      >I</kbd
+                    >
                   </td>
-                  <td>The Keys, Share, Macros and Printer output panels</td>
+                  <td>The Keys, Share, Macros, Printer output and Files panels</td>
                 </tr>
                 <tr>
                   <td><kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd></td>
@@ -475,13 +477,14 @@
           <section id="panels">
             <h2>Side panels</h2>
             <p>
-              Four panels pull out from tabs on the right edge of the window, one at a time:
+              Five panels pull out from tabs on the right edge of the window, one at a time:
               <strong>Keys</strong> (<kbd>Alt</kbd>+<kbd>K</kbd>),
               <strong>Share</strong> (<kbd>Alt</kbd>+<kbd>S</kbd>),
-              <strong>Macros</strong> (<kbd>Alt</kbd>+<kbd>M</kbd>) and
+              <strong>Macros</strong> (<kbd>Alt</kbd>+<kbd>M</kbd>),
               <strong>Printer</strong> (<kbd>Alt</kbd>+<kbd>P</kbd>, see
-              <a href="#printer">Printer output</a>). The screen makes room for the panel. Press the
-              same keys again, or ×, to close it.
+              <a href="#printer">Printer output</a>) and
+              <strong>Files</strong> (<kbd>Alt</kbd>+<kbd>I</kbd>, see <a href="#files">Files</a>).
+              The screen makes room for the panel. Press the same keys again, or ×, to close it.
             </p>
             <figure class="help-narrow">
               <img src="/help/keys.png" alt="The Keys panel" />
@@ -638,6 +641,38 @@
               (shown with their type, such as <code>*AFPDS</code>) can't be shown here: open those
               in ACS.
             </p>
+          </section>
+
+          <section id="files">
+            <h2>Files</h2>
+            <p>
+              Download a file from the integrated file system (IFS) of the system of the tab
+              showing, by its path. You can read only what your IBM i profile may read.
+            </p>
+            <ol>
+              <li>
+                Press <kbd>Alt</kbd>+<kbd>I</kbd>, or the <strong>Files</strong> tab on the right
+                edge.
+              </li>
+              <li>
+                Sign on with a saved login (<strong>Sign on as</strong> your user), or with your IBM
+                i user and password. <strong>Save this login</strong> keeps it for next time, and
+                <strong>Remember the password too</strong>, when your administrator allows it, signs
+                on without asking. A wrong password counts toward disabling your profile, as at the
+                sign-on screen. After 15 minutes unused, or <strong>Sign off</strong>, it asks
+                again.
+              </li>
+              <li>
+                Type the file's full path, such as <code>/home/YOURUSER/report.csv</code>, and press
+                <kbd>Enter</kbd> or <strong>Download</strong>. The browser saves it with its own
+                name. If it can't be read, the panel says why: no such file or folder, a folder, or
+                not authorised.
+              </li>
+              <li>
+                The last few paths are listed under <strong>Recent</strong>, to download again.
+              </li>
+            </ol>
+            <p>Uploading and browsing folders are still to come.</p>
           </section>
 
           <section id="looks">

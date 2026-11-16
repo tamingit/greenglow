@@ -1,4 +1,4 @@
-/* The side panels (Keys, Share, Macros): a column of tabs on the window's right edge, each
+/* The side panels (Keys, Share, Macros, Printer, Files): a column of tabs on the window's right edge, each
    pulling its panel out from the edge. One is open at a time. The page keeps clear of them:
    main and the tab strip leave --side-space on the right, so the screen refits beside an open
    panel instead of under it. On a narrow window an open panel lies over the screen. */
@@ -24,7 +24,8 @@
   --side-space: calc(var(--side-tabs) + 16rem);
 }
 
-:root[data-side='printer'] {
+:root[data-side='printer'],
+:root[data-side='files'] {
   --side-space: calc(var(--side-tabs) + 20rem);
 }
 

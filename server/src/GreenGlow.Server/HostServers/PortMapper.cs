@@ -55,6 +55,11 @@ public sealed class HostServerOptions
     public int? SignOnPort { get; set; }
 
     public int? SignOnSecurePort { get; set; }
+
+    /// <summary>Another port for the file server, for tests. Production asks the port mapper, then uses IBM's: 8473, and 9473 over TLS.</summary>
+    public int? FilePort { get; set; }
+
+    public int? FileSecurePort { get; set; }
 }
 
 /// <summary>
@@ -73,7 +78,8 @@ public sealed class HostEndpoints(HostServerOptions options, PrinterOptions prin
     {
         var (plain, secure) = service == HostService.NetworkPrint
             ? (printer.Port, printer.SecurePort)
-            : service == HostService.SignOn ? (options.SignOnPort, options.SignOnSecurePort) : (null, null);
+            : service == HostService.SignOn ? (options.SignOnPort, options.SignOnSecurePort)
+            : service == HostService.FileServer ? (options.FilePort, options.FileSecurePort) : (null, null);
         return telnet with { Port = telnet.Secure ? secure ?? service.SecurePort : plain ?? service.Port };
     }
 
