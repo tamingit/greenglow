@@ -16,6 +16,12 @@ public sealed class FileServerException(int code, string message) : Exception(me
 public sealed record OpenedFile(int Handle, long Size);
 
 /// <summary>
+/// One entry of a folder as the file server lists it. The size is the entry's own: for a
+/// symbolic link that is the link, not what it points to (an open follows the link).
+/// </summary>
+public sealed record FolderEntry(string Name, bool Folder, long Size, DateTimeOffset Modified, int ObjectType, int Attributes);
+
+/// <summary>
 /// The IBM i file server (as-file, server ID E002, port 8473 or 9473 over TLS, found through the
 /// port mapper first): the integrated file system by path. It signs on as every host server
 /// does, then exchanges attributes, which settles the datastream level and the CCSID of path
@@ -25,7 +31,8 @@ public sealed record OpenedFile(int Handle, long Size);
 /// the name. A refusal is reply 8001 with the return code at byte 22.
 ///
 /// Verified against a real IBM i (datastream level 24): exchange (22, reply 8009), open (2,
-/// reply 8002), read (3, reply 8003; no data at the end of the file) and close (9, reply 8004).
+/// reply 8002), read (3, reply 8003; no data at the end of the file), close (9, reply 8004) and
+/// list (10: a chain of 8005 replies, one per entry, ended by return code 18).
 /// </summary>
 public sealed class FileServerClient : IAsyncDisposable
 {
@@ -37,8 +44,15 @@ public sealed class FileServerClient : IAsyncDisposable
     /// <summary>Longer paths are refused before anything is sent.</summary>
     public const int MaxPathLength = 4096;
 
-    private const ushort ExchangeRequest = 22, OpenRequest = 2, ReadRequest = 3, CloseRequest = 9;
-    private const ushort ReturnCodeReply = 0x8001, OpenReply = 0x8002, ReadReply = 0x8003, CloseReply = 0x8004, ExchangeReply = 0x8009;
+    private const ushort ExchangeRequest = 22, OpenRequest = 2, ReadRequest = 3, CloseRequest = 9, ListRequest = 10;
+    private const ushort ReturnCodeReply = 0x8001, OpenReply = 0x8002, ReadReply = 0x8003, CloseReply = 0x8004, ListReply = 0x8005,
+        ExchangeReply = 0x8009;
+
+    /// <summary>The return code that ends a listing: no more entries.</summary>
+    public const int NoMoreFiles = 18;
+
+    /// <summary>The fixed attribute of a folder (as in DOS: 0x10).</summary>
+    private const int FolderAttribute = 0x10;
 
     /// <summary>The level asked for, as IBM's client asks for it on 6.1 and later; the server answers with the one it uses.</summary>
     private const int RequestedLevel = 0x60100;
@@ -97,7 +111,7 @@ public sealed class FileServerClient : IAsyncDisposable
         var handle = BinaryPrimitives.ReadInt32BigEndian(reply.AsSpan(22));
         var size = DatastreamLevel >= 16
             ? reply.Length >= 97 ? BinaryPrimitives.ReadInt64BigEndian(reply.AsSpan(89)) : -1
-            : reply.Length >= 52 ? BinaryPrimitives.ReadUInt32BigEndian(reply.AsSpan(48)) : -1;
+            : reply.Length >= 66 ? BinaryPrimitives.ReadUInt32BigEndian(reply.AsSpan(62)) : -1;
         return new OpenedFile(handle, size);
     }
 
@@ -114,6 +128,55 @@ public sealed class FileServerClient : IAsyncDisposable
             data.Write(reply, 30, ll - 6);
             if (BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(20)) == 0) return data.ToArray();
         }
+    }
+
+    /// <summary>
+    /// The entries of a folder (without . and ..), as many as `most`: the server stops there.
+    /// Throws FileServerException 3 when there is no such folder.
+    /// </summary>
+    public async Task<IReadOnlyList<FolderEntry>> ListAsync(string folder, int most, CancellationToken cancel)
+    {
+        var pattern = folder.TrimEnd('/') + "/*";
+        await _host.SendAsync(List(_host.NextCorrelation(), PathBytes(pattern), (ushort)Ccsid, most), cancel);
+        var entries = new List<FolderEntry>();
+        while (true)
+        {
+            var reply = await _host.ReceiveAsync(cancel);
+            if (reply.Length < 22 || BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(6)) != ServerId) throw Malformed("list");
+            var id = BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(18));
+            if (id == ReturnCodeReply)
+            {
+                var code = reply.Length >= 24 ? BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(22)) : -1;
+                if (code is 0 or NoMoreFiles) return entries;
+                throw new FileServerException(code, Describe(code));
+            }
+            if (id != ListReply) throw Malformed($"reply {id:X4}");
+            if (Entry(reply, DatastreamLevel) is { } entry && entry.Name is not ("." or "..")) entries.Add(entry);
+            if (BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(20)) == 0) return entries;
+        }
+    }
+
+    /// <summary>
+    /// One list reply (8005): the modification date at 30 (seconds, then microseconds), the size
+    /// at 81 (64-bit, from level 8; 32-bit at 46 before), the fixed attributes at 50, the object
+    /// type at 54, and the name after the template (length, code point, UTF-16).
+    /// </summary>
+    public static FolderEntry? Entry(byte[] reply, int level)
+    {
+        var template = BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(16));
+        var at = 20 + template;
+        if (reply.Length < Math.Max(at + 6, 89)) return null;
+        var length = BinaryPrimitives.ReadInt32BigEndian(reply.AsSpan(at));
+        if (length < 6 || at + length > reply.Length || (length - 6) % 2 != 0) return null;
+        var name = Encoding.BigEndianUnicode.GetString(reply, at + 6, length - 6);
+        var size = level >= 8 && level != 0xF4F4
+            ? BinaryPrimitives.ReadInt64BigEndian(reply.AsSpan(81))
+            : BinaryPrimitives.ReadUInt32BigEndian(reply.AsSpan(46));
+        var seconds = BinaryPrimitives.ReadUInt32BigEndian(reply.AsSpan(30));
+        var attributes = BinaryPrimitives.ReadInt32BigEndian(reply.AsSpan(50));
+        var type = BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(54));
+        var folder = type is 1 or 2 && (attributes & FolderAttribute) != 0;
+        return new FolderEntry(name, folder, size, DateTimeOffset.FromUnixTimeSeconds(seconds), type, attributes);
     }
 
     public async Task CloseAsync(int handle, CancellationToken cancel)
@@ -255,6 +318,25 @@ public sealed class FileServerClient : IAsyncDisposable
         if (level >= 16) BinaryPrimitives.WriteInt64BigEndian(span[50..], offset);
         else BinaryPrimitives.WriteInt32BigEndian(span[30..], checked((int)offset));
         BinaryPrimitives.WriteInt32BigEndian(span[34..], length);
+        return frame;
+    }
+
+    /// <summary>
+    /// List attributes (10) by name: template 20; handle 0 at 22, the CCSID at 26, 1 at 28, the
+    /// most entries at 34 (0xFFFF: no limit), attribute level 1 at 36, pattern matching 0 at 38;
+    /// the pattern (a folder, then /*) as a length at 40, code point 2 at 44, the name from 46.
+    /// </summary>
+    public static byte[] List(int correlation, byte[] pattern, ushort ccsid, int most)
+    {
+        var frame = NewFrame(46 + pattern.Length, correlation, 20, ListRequest);
+        var span = frame.AsSpan();
+        BinaryPrimitives.WriteUInt16BigEndian(span[26..], ccsid);
+        BinaryPrimitives.WriteInt32BigEndian(span[28..], 1);
+        BinaryPrimitives.WriteUInt16BigEndian(span[34..], most is > 0 and < 0xFFFF ? (ushort)most : (ushort)0xFFFF);
+        BinaryPrimitives.WriteUInt16BigEndian(span[36..], 1);
+        BinaryPrimitives.WriteInt32BigEndian(span[40..], pattern.Length + 6);
+        BinaryPrimitives.WriteUInt16BigEndian(span[44..], 2);
+        pattern.CopyTo(frame, 46);
         return frame;
     }
 

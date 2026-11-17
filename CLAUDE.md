@@ -61,7 +61,7 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
 - **Printer output.** It is in `printer.ts` and `server/src/GreenGlow.Server/Printing/`.
   - The user signs on to the IBM i's Network Print server with their own IBM i user and password.
   - They see their own spooled files and open one as a PDF. The server renders SCS, passes PDFs through and refuses AFP.
-- **Files.** The Files panel downloads a file from the IFS by path (`files.ts`, `server/src/GreenGlow.Server/Files/`), through the IBM i's file server (`HostServers/FileServer.cs`; the port mapper first, 8473/9473 as the fallback). The user signs on with a saved login or their own IBM i user and password, as in the Printer panel. Upload and folder listing aren't built yet.
+- **Files.** The Files panel browses the IFS's folders and downloads files from it (`files.ts`, `server/src/GreenGlow.Server/Files/`), through the IBM i's file server (`HostServers/FileServer.cs`; the port mapper first, 8473/9473 as the fallback). The user signs on with a saved login or their own IBM i user and password, as in the Printer panel. Upload isn't built yet.
 - **Help.** The help page (`help.html`) holds the user guide. Only administrators can open the administrator guide (`/api/admin/guide`, from `server/src/GreenGlow.Server/Help/`). `npm run screenshots` takes the screenshots against the fake IBM i.
 - **Public demo.** Demo mode (`Demo__Enabled`) lets anyone sign in as a guest and use only demo systems: the fake IBM i, and PUB400 once it is enabled. See [Demo mode](#demo-mode).
 

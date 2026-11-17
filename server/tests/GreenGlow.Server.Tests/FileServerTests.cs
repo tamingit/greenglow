@@ -83,6 +83,54 @@ public sealed class FileServerTests
         Assert.Equal(100, Short(frame, 30));
     }
 
+    [Fact]
+    public void ListAsksForTheFolderPattern()
+    {
+        var pattern = FileServerClient.PathBytes("/home/me/*");
+        var frame = FileServerClient.List(6, pattern, 1200, 500);
+        Header(frame, 6, 20, 10);
+        Assert.Equal(46 + pattern.Length, frame.Length);
+        Assert.Equal(0, Int(frame, 22));
+        Assert.Equal(1200, Short(frame, 26));
+        Assert.Equal(1, Int(frame, 28));
+        Assert.Equal(500, Short(frame, 34));
+        Assert.Equal(1, Short(frame, 36));
+        Assert.Equal(0, Short(frame, 38));
+        Assert.Equal(pattern.Length + 6, Int(frame, 40));
+        Assert.Equal(2, Short(frame, 44));
+        Assert.Equal(pattern, frame[46..]);
+        Assert.Equal(0xFFFF, Short(FileServerClient.List(7, pattern, 1200, 0), 34));
+    }
+
+    [Theory]
+    [InlineData(2, 0x10, "docs", true, 8192)]
+    [InlineData(1, 0x20, "report.csv", false, 0x1_2345_6789)]
+    [InlineData(3, 0x10, "a-link", false, 74)]
+    public void AListReplyIsAnEntry(int type, int attributes, string name, bool folder, long size)
+    {
+        // As the IBM i sends one (level 24): a 93-byte template, then the name.
+        var nameBytes = FileServerClient.PathBytes("/" + name)[2..];
+        var reply = new byte[20 + 93 + 6 + nameBytes.Length];
+        var s = reply.AsSpan();
+        BinaryPrimitives.WriteInt32BigEndian(s, reply.Length);
+        BinaryPrimitives.WriteUInt16BigEndian(s[6..], FileServerClient.ServerId);
+        BinaryPrimitives.WriteUInt16BigEndian(s[16..], 93);
+        BinaryPrimitives.WriteUInt16BigEndian(s[18..], 0x8005);
+        BinaryPrimitives.WriteUInt16BigEndian(s[20..], 1);
+        BinaryPrimitives.WriteUInt32BigEndian(s[30..], 1_700_000_000);
+        BinaryPrimitives.WriteInt32BigEndian(s[50..], attributes);
+        BinaryPrimitives.WriteUInt16BigEndian(s[54..], (ushort)type);
+        BinaryPrimitives.WriteInt64BigEndian(s[81..], size);
+        BinaryPrimitives.WriteInt32BigEndian(s[113..], 6 + nameBytes.Length);
+        BinaryPrimitives.WriteUInt16BigEndian(s[117..], 2);
+        nameBytes.CopyTo(reply, 119);
+
+        var entry = FileServerClient.Entry(reply, 24)!;
+        Assert.Equal((name, folder, size, type), (entry.Name, entry.Folder, entry.Size, entry.ObjectType));
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_700_000_000), entry.Modified);
+        Assert.Null(FileServerClient.Entry(reply[..100], 24));
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("relative/path")]
