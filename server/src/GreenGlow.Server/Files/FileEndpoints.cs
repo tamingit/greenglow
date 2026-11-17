@@ -90,9 +90,11 @@ public static class FileEndpoints
             return Results.NoContent();
         });
 
-        // A folder's entries, folders first, then by name; at most MaxEntries (truncated says so).
-        files.MapGet("/list", async (string connection, string? path, HttpContext context, Access access,
-            FileSessions sessions) =>
+        // A folder's entries, a page (Files:PageSize) at a time, each page folders first, then by name.
+        // A page is cut in the server's own order, and next (when there is more) is where the
+        // following page starts: give it back as afterId and afterName.
+        files.MapGet("/list", async (string connection, string? path, string? afterId, string? afterName, HttpContext context,
+            Access access, FileSessions sessions, FilesOptions options) =>
         {
             var user = CurrentUser.From(context.User)!;
             if (await access.FindAsync(user, connection) is null) return NoSystem();
@@ -106,19 +108,39 @@ public static class FileEndpoints
             {
                 return Results.BadRequest(new { error = "path", message = e.Message });
             }
+            ListRestart? after = null;
+            if (afterName is not null || afterId is not null)
+            {
+                byte[] id;
+                try
+                {
+                    id = Convert.FromHexString(afterId ?? "");
+                }
+                catch (FormatException)
+                {
+                    return Results.BadRequest(new { error = "after", message = "afterId is the hex of a restart ID." });
+                }
+                if (id.Length is not (0 or 4) || string.IsNullOrEmpty(afterName))
+                    return Results.BadRequest(new { error = "after", message = "Give the afterId and afterName a listing's next gave." });
+                after = new ListRestart(id, afterName);
+            }
             using var use = await session.UseAsync(context.RequestAborted);
             try
             {
                 // One more than shown, to know whether there were more.
-                var entries = await session.Client.ListAsync(folder, MaxEntries + 1, CancellationToken.None);
+                var size = Math.Clamp(options.PageSize, 1, 60000);
+                var entries = await session.Client.ListAsync(folder, size + 1, after, CancellationToken.None);
+                var page = entries.Take(size).ToList();
+                var more = entries.Count > size;
                 return Results.Json(new
                 {
                     path = folder,
-                    truncated = entries.Count > MaxEntries,
-                    entries = entries
+                    truncated = more,
+                    pageSize = size,
+                    next = more ? new { id = Convert.ToHexString(page[^1].RestartId), name = page[^1].Name } : null,
+                    entries = page
                         .OrderByDescending(e => e.Folder)
                         .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
-                        .Take(MaxEntries)
                         .Select(e => new { name = e.Name, folder = e.Folder, size = e.Folder ? (long?)null : e.Size, modified = e.Modified }),
                 });
             }
@@ -468,9 +490,6 @@ public static class FileEndpoints
 
     /// <summary>A path the panel never deletes: the root, or a folder directly in it.</summary>
     public static bool Protected(string path) => path.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries).Length <= 1;
-
-    /// <summary>The most entries a listing shows.</summary>
-    public const int MaxEntries = 2000;
 
     /// <summary>A folder's path as listed: absolute, no trailing slash but the root's, . and .. done.</summary>
     public static string FolderPath(string? path)

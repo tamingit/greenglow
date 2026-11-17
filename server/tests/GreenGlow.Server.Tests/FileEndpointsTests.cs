@@ -126,7 +126,7 @@ public sealed class FileEndpointsTests
             Console.WriteLine("files API live test skipped: E2E_IBMI_* not set");
             return;
         }
-        using var factory = Factory(RelayFactory.SeedJson($"live={target}"));
+        using var factory = Factory(RelayFactory.SeedJson($"live={target}"), ("Files:PageSize", "100"));
         var client = await factory.SignedInClientAsync();
 
         var signedOn = await Json(await client.PostAsJsonAsync("/api/files/live/signon", new { user, password }));
@@ -146,10 +146,27 @@ public sealed class FileEndpointsTests
         Assert.Equal([0x01, 0xF7], bytes[..2]);
         Console.WriteLine($"downloaded {bytes.Length} bytes through the API");
 
-        var listing = await Json(await client.GetAsync("/api/files/live/list?path=/QOpenSys/usr/bin/"));
-        Assert.Equal("/QOpenSys/usr/bin", listing.GetProperty("path").GetString());
-        var entries = listing.GetProperty("entries").EnumerateArray().ToList();
+        // Pages of 100, each going on from where the last one's next said: every entry once.
+        var entries = new List<JsonElement>();
+        var url = "/api/files/live/list?path=/QOpenSys/usr/bin/";
+        var pages = 0;
+        while (true)
+        {
+            var listing = await Json(await client.GetAsync(url));
+            Assert.Equal("/QOpenSys/usr/bin", listing.GetProperty("path").GetString());
+            Assert.Equal(100, listing.GetProperty("pageSize").GetInt32());
+            entries.AddRange(listing.GetProperty("entries").EnumerateArray());
+            pages++;
+            if (listing.GetProperty("next").ValueKind == JsonValueKind.Null) break;
+            Assert.True(listing.GetProperty("truncated").GetBoolean());
+            var next = listing.GetProperty("next");
+            url = $"/api/files/live/list?path=/QOpenSys/usr/bin&afterId={next.GetProperty("id").GetString()}&afterName={Uri.EscapeDataString(next.GetProperty("name").GetString()!)}";
+        }
+        var names = entries.Select(e => e.GetProperty("name").GetString()).ToList();
+        Assert.True(pages > 1, "a few hundred entries make several pages of 100");
+        Assert.Equal(names.Count, names.Distinct().Count());
         Assert.Contains(entries, e => e.GetProperty("name").GetString() == "ls" && !e.GetProperty("folder").GetBoolean());
+        Assert.Equal("after", await Error(await client.GetAsync("/api/files/live/list?path=/QOpenSys/usr/bin&afterId=zz&afterName=a")));
         var usr = (await Json(await client.GetAsync("/api/files/live/list?path=/QOpenSys/usr"))).GetProperty("entries").EnumerateArray().ToList();
         var bin = Assert.Single(usr, e => e.GetProperty("name").GetString() == "bin");
         Assert.True(bin.GetProperty("folder").GetBoolean());
