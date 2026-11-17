@@ -131,6 +131,68 @@ public sealed class FileServerTests
         Assert.Null(FileServerClient.Entry(reply[..100], 24));
     }
 
+    [Fact]
+    public void OpenForWritingTagsTheFileAndSaysWhatToDoWhenItIsThere()
+    {
+        var path = FileServerClient.PathBytes("/tmp/a.csv");
+        var frame = FileServerClient.Open(8, path, 1200, 24, 2, 4, 1208);
+        Assert.Equal(1200, Short(frame, 22));
+        Assert.Equal(1208, Short(frame, 28));
+        Assert.Equal(2, Short(frame, 30));
+        Assert.Equal(0, Short(frame, 32));
+        Assert.Equal(4, Short(frame, 36));
+    }
+
+    [Fact]
+    public void WriteCarriesTheBytesAsCodePoint0020()
+    {
+        byte[] data = [1, 2, 3, 4, 5];
+        var frame = FileServerClient.Write(9, 7, 0x1_0000_0000, data, 24);
+        Header(frame, 9, 34, 4);
+        Assert.Equal(60 + data.Length, frame.Length);
+        Assert.Equal(7, Int(frame, 22));
+        Assert.Equal(0x1_0000_0000, BinaryPrimitives.ReadInt64BigEndian(frame.AsSpan(46)));
+        Assert.Equal(2, Short(frame, 34));
+        Assert.Equal(0xFFFF, Short(frame, 36));
+        Assert.Equal(data.Length + 6, Int(frame, 54));
+        Assert.Equal(0x0020, Short(frame, 58));
+        Assert.Equal(data, frame[60..]);
+
+        var old = FileServerClient.Write(10, 7, 512, data, 8);
+        Header(old, 10, 18, 4);
+        Assert.Equal(512, Int(old, 30));
+        Assert.Equal(data, old[44..]);
+    }
+
+    [Theory]
+    [InlineData(13, 1)]
+    [InlineData(12, 2)]
+    public void CreateFolderAndDeleteFileNameThePath(ushort request, ushort codePoint)
+    {
+        var path = FileServerClient.PathBytes("/tmp/x");
+        var frame = request == 13 ? FileServerClient.CreateFolder(11, path, 1200) : FileServerClient.DeleteFile(11, path, 1200);
+        Header(frame, 11, 8, request);
+        Assert.Equal(34 + path.Length, frame.Length);
+        Assert.Equal(1200, Short(frame, 22));
+        Assert.Equal(1, Int(frame, 24));
+        Assert.Equal(path.Length + 6, Int(frame, 28));
+        Assert.Equal(codePoint, Short(frame, 32));
+        Assert.Equal(path, frame[34..]);
+    }
+
+    [Fact]
+    public void DeleteFolderHasItsFlagsBeforeTheName()
+    {
+        var path = FileServerClient.PathBytes("/tmp/x");
+        var frame = FileServerClient.DeleteFolder(12, path, 1200);
+        Header(frame, 12, 10, 14);
+        Assert.Equal(36 + path.Length, frame.Length);
+        Assert.Equal(0, Short(frame, 28));
+        Assert.Equal(path.Length + 6, Int(frame, 30));
+        Assert.Equal(1, Short(frame, 34));
+        Assert.Equal(path, frame[36..]);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("relative/path")]

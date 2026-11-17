@@ -188,7 +188,7 @@ public enum LogKind
     /// <summary>A print session: signed on to the IBM i's Network Print server (printer output).</summary>
     Printer,
 
-    /// <summary>A file session: signed on to the IBM i's file server (the Files panel), with how many files were downloaded.</summary>
+    /// <summary>A file session: signed on to the IBM i's file server (the Files panel), with how many files were downloaded or uploaded.</summary>
     Files,
 
     /// <summary>An administrator drained, resumed or resynced a node (several servers).</summary>

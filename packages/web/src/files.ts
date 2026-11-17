@@ -51,6 +51,42 @@ interface Listing {
   entries: FolderEntry[];
 }
 
+/** One file (or empty folder) to upload, and how it went. */
+export interface UploadItem {
+  /** Null for an empty folder, which is made rather than sent. */
+  file: File | null;
+  /** Where it goes, from the root of the IFS. */
+  path: string;
+  state: 'waiting' | 'sending' | 'done' | 'exists' | 'failed' | 'stopped';
+  note: string;
+}
+
+/** What to upload: each file at its relative path (a folder's own name first) in `folder`. */
+export function uploadItems(
+  folder: string,
+  files: readonly { file: File | null; relative: string }[],
+): UploadItem[] {
+  return files.map(({ file, relative }) => ({
+    file,
+    path: joinPath(folder, relative.replace(/^\/+/, '')),
+    state: 'waiting',
+    note: '',
+  }));
+}
+
+/** What the status line says when an upload ends. */
+export function uploadSummary(items: readonly UploadItem[]): string {
+  const count = (state: UploadItem['state']) => items.filter((i) => i.state === state).length;
+  const files = (n: number) => (n === 1 ? '1 file' : `${n} files`);
+  const parts = [
+    count('done') ? `Uploaded ${files(count('done'))}.` : '',
+    count('exists') ? `${files(count('exists'))} already there, not replaced.` : '',
+    count('failed') ? `${files(count('failed'))} failed.` : '',
+    count('stopped') || count('waiting') ? 'Stopped.' : '',
+  ];
+  return parts.filter(Boolean).join(' ') || 'Nothing to upload.';
+}
+
 /** A size for people: bytes, then KB, MB and GB (1024s), one decimal under ten. */
 export function sizeText(bytes: number): string {
   if (bytes < 0) return '';
@@ -126,6 +162,11 @@ export class FilesPanel {
   #folder = '';
   /** Where the recent downloads show, under the folder's entries. */
   readonly #recentBox = h('div', { class: 'files-recent' });
+  /** The upload under way or last done, shown under the folder's entries. */
+  readonly #uploadBox = h('div', { class: 'files-uploads' });
+  #uploads: UploadItem[] = [];
+  #uploading = false;
+  #stop: (() => void) | undefined;
   /** Counts what the panel shows, so a late answer for an earlier system is dropped. */
   #generation = 0;
 
@@ -389,13 +430,206 @@ export class FilesPanel {
       ),
       where,
       h('div', { class: 'files-tools' }, up, refresh),
-      listing.entries.length
-        ? list
-        : h('p', { class: 'printer-empty', text: 'This folder is empty.' }),
+      this.#uploadTools(listing.path),
+      this.#dropZone(
+        listing.path,
+        listing.entries.length
+          ? list
+          : h('p', { class: 'printer-empty', text: 'This folder is empty. Drop files here.' }),
+      ),
+      this.#uploadBox,
       this.#recentBox,
     );
     this.#showRecent();
+    this.#showUploads();
     (rows[0]?.querySelector<HTMLElement>('.files-entry') ?? pathBox).focus();
+  }
+
+  /** Upload files, Upload folder and Replace: files chosen go into `folder`. */
+  #uploadTools(folder: string): HTMLElement {
+    const files = h('input', { type: 'file', multiple: true, hidden: true });
+    const tree = h('input', { type: 'file', multiple: true, hidden: true, webkitdirectory: true });
+    const pick = (input: HTMLInputElement) => () => {
+      if (this.#uploading) return;
+      input.value = '';
+      input.click();
+    };
+    const chosen = (input: HTMLInputElement) => () => {
+      const list = [...(input.files ?? [])].map((file) => ({
+        file,
+        relative: file.webkitRelativePath || file.name,
+      }));
+      if (list.length) void this.#upload(uploadItems(folder, list));
+    };
+    files.addEventListener('change', chosen(files));
+    tree.addEventListener('change', chosen(tree));
+    const uploadFiles = button('Upload files…', pick(files), 'printer-btn');
+    uploadFiles.title = `Send files into ${folder}`;
+    const uploadFolder = button('Upload folder…', pick(tree), 'printer-btn');
+    uploadFolder.title = `Send a folder, with everything in it, into ${folder}`;
+    const replace = h('input', { type: 'checkbox', id: 'files-replace' });
+    replace.checked = this.#replace;
+    replace.addEventListener('change', () => (this.#replace = replace.checked));
+    return h(
+      'div',
+      { class: 'files-upload-tools' },
+      h('div', { class: 'files-tools' }, uploadFiles, uploadFolder, files, tree),
+      h('label', { class: 'files-check' }, replace, ' Replace files that are already there'),
+    );
+  }
+
+  #replace = false;
+
+  /** The folder's entries, taking files and folders dropped on them. */
+  #dropZone(folder: string, inner: HTMLElement): HTMLElement {
+    const zone = h('div', { class: 'files-drop' }, inner);
+    zone.addEventListener('dragover', (event) => {
+      if (!event.dataTransfer?.types.includes('Files') || this.#uploading) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+      zone.dataset.over = '';
+    });
+    zone.addEventListener('dragleave', () => delete zone.dataset.over);
+    zone.addEventListener('drop', (event) => {
+      delete zone.dataset.over;
+      if (!event.dataTransfer || this.#uploading) return;
+      event.preventDefault();
+      const entries = [...event.dataTransfer.items]
+        .map((item) => item.webkitGetAsEntry())
+        .filter((entry): entry is FileSystemEntry => entry !== null);
+      void collect(entries).then((list) => {
+        if (list.length) void this.#upload(uploadItems(folder, list));
+      });
+    });
+    return zone;
+  }
+
+  /** Sends each item in turn: a folder is made, a file is sent with its progress shown. */
+  async #upload(items: UploadItem[], replace = this.#replace): Promise<void> {
+    if (this.#uploading) return;
+    this.#uploading = true;
+    this.#uploads = items;
+    let stopped = false;
+    let abort: (() => void) | undefined;
+    this.#stop = () => {
+      stopped = true;
+      abort?.();
+    };
+    this.#showUploads();
+    for (const item of items) {
+      if (stopped) {
+        item.state = 'stopped';
+        continue;
+      }
+      item.state = 'sending';
+      this.#showUploads();
+      try {
+        if (item.file === null) {
+          await api('POST', this.#path(`/folder?path=${encodeURIComponent(item.path)}`));
+        } else {
+          const file = item.file;
+          const sending = put(
+            this.#path(
+              `/upload?path=${encodeURIComponent(item.path)}&replace=${replace ? 'true' : 'false'}`,
+            ),
+            file,
+            (sent) => {
+              item.note = file.size ? `${Math.floor((sent / file.size) * 100)}%` : '';
+              this.#showUploads();
+            },
+          );
+          abort = sending.abort;
+          await sending.done;
+        }
+        item.state = 'done';
+        item.note = item.file ? sizeText(item.file.size) : 'folder';
+      } catch (error) {
+        if (stopped) item.state = 'stopped';
+        else if (error instanceof ApiError && error.code === 'exists') item.state = 'exists';
+        else item.state = 'failed';
+        item.note = item.state === 'stopped' ? '' : (error as Error).message;
+        if (error instanceof ApiError && error.code === 'signon-needed') stopped = true;
+      }
+      this.#showUploads();
+    }
+    this.#uploading = false;
+    this.#stop = undefined;
+    this.#showUploads();
+    this.#say(
+      uploadSummary(items),
+      items.some((i) => i.state === 'failed'),
+    );
+    // The folder shown now gets the new files.
+    if (this.#folder) {
+      const said = this.#status.textContent;
+      const error = this.#status.dataset.error === 'true';
+      await this.#list(this.#folder, this.#generation, true);
+      this.#say(said ?? '', error);
+    }
+  }
+
+  /** The upload's rows: each path, how it went, Stop while it runs, Replace for those already there. */
+  #showUploads(): void {
+    if (!this.#uploads.length) {
+      this.#uploadBox.replaceChildren();
+      return;
+    }
+    const waiting = this.#uploads.filter((i) => i.state !== 'done').length;
+    const stop = this.#uploading ? button('Stop', () => this.#stop?.(), 'printer-btn') : undefined;
+    const there = this.#uploads.filter((i) => i.state === 'exists');
+    const replace =
+      !this.#uploading && there.length
+        ? button(
+            there.length === 1 ? 'Replace it' : `Replace the ${there.length} already there`,
+            () =>
+              void this.#upload(
+                there.map((i) => ({ ...i, state: 'waiting', note: '' })),
+                true,
+              ),
+            'printer-btn',
+          )
+        : undefined;
+    const clear = !this.#uploading
+      ? button(
+          'Clear',
+          () => {
+            this.#uploads = [];
+            this.#showUploads();
+          },
+          'printer-btn',
+        )
+      : undefined;
+    const words: Record<UploadItem['state'], string> = {
+      waiting: 'Waiting',
+      sending: 'Sending',
+      done: 'Done',
+      exists: 'Already there',
+      failed: 'Failed',
+      stopped: 'Stopped',
+    };
+    this.#uploadBox.replaceChildren(
+      h(
+        'p',
+        { class: 'printer-note' },
+        this.#uploading ? `Uploading (${waiting} to go)` : 'Uploaded',
+      ),
+      h(
+        'ul',
+        { class: 'printer-files files-upload-list', 'aria-label': 'Uploads' },
+        ...this.#uploads.map((item) =>
+          h(
+            'li',
+            { class: 'files-upload', 'data-state': item.state },
+            h('span', { class: 'files-upload-path', text: item.path }),
+            h('span', {
+              class: 'printer-file-detail',
+              text: [words[item.state], item.note].filter(Boolean).join(' · '),
+            }),
+          ),
+        ),
+      ),
+      h('div', { class: 'files-tools' }, ...[stop, replace, clear].filter((b) => b !== undefined)),
+    );
   }
 
   #row(folder: string, entry: FolderEntry): HTMLElement {
@@ -502,4 +736,76 @@ export class FilesPanel {
     await this.show(this.#current, true);
     this.#say('Signed off.');
   }
+}
+
+/**
+ * Sends a file as a request's body with PUT, telling its progress. XMLHttpRequest, because fetch
+ * can't tell how much of an upload has gone. A refusal rejects with the server's ApiError.
+ */
+function put(
+  url: string,
+  file: File,
+  progress: (sent: number) => void,
+): { done: Promise<void>; abort: () => void } {
+  const request = new XMLHttpRequest();
+  const done = new Promise<void>((resolve, reject) => {
+    request.open('PUT', url);
+    request.setRequestHeader('content-type', 'application/octet-stream');
+    request.upload.addEventListener('progress', (event) => progress(event.loaded));
+    request.addEventListener('load', () => {
+      if (request.status >= 200 && request.status < 300) {
+        resolve();
+        return;
+      }
+      let message = `Upload failed (${request.status})`;
+      let code: string | undefined;
+      try {
+        const body = JSON.parse(request.responseText) as { message?: string; error?: string };
+        message = body.message ?? message;
+        code = body.error;
+      } catch {
+        // No JSON body: keep the status.
+      }
+      reject(new ApiError(request.status, message, code));
+    });
+    request.addEventListener('error', () =>
+      reject(new Error('The upload could not reach the server.')),
+    );
+    request.addEventListener('abort', () => reject(new Error('Stopped.')));
+    request.send(file);
+  });
+  return { done, abort: () => request.abort() };
+}
+
+/**
+ * The files (and empty folders) in what was dropped, each with its path from the drop: a
+ * dropped folder's own name comes first, as when a folder is chosen.
+ */
+async function collect(
+  entries: FileSystemEntry[],
+): Promise<{ file: File | null; relative: string }[]> {
+  const found: { file: File | null; relative: string }[] = [];
+  const walk = async (entry: FileSystemEntry, relative: string): Promise<void> => {
+    if (entry.isFile) {
+      const file = await new Promise<File>((resolve, reject) =>
+        (entry as FileSystemFileEntry).file(resolve, reject),
+      );
+      found.push({ file, relative });
+      return;
+    }
+    const reader = (entry as FileSystemDirectoryEntry).createReader();
+    const children: FileSystemEntry[] = [];
+    // readEntries answers in batches until it answers none.
+    for (;;) {
+      const batch = await new Promise<FileSystemEntry[]>((resolve, reject) =>
+        reader.readEntries(resolve, reject),
+      );
+      if (!batch.length) break;
+      children.push(...batch);
+    }
+    if (!children.length) found.push({ file: null, relative });
+    for (const child of children) await walk(child, `${relative}/${child.name}`);
+  };
+  for (const entry of entries) await walk(entry, entry.name);
+  return found;
 }

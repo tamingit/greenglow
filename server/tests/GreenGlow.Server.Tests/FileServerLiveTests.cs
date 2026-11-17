@@ -80,6 +80,56 @@ public sealed class FileServerLiveTests
     }
 
     [Fact]
+    public async Task FilesUploadIntoNewFoldersReadBackAndAreCleanedUp()
+    {
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        await using var client = await ConnectAsync(cancel.Token);
+        if (client is null) return;
+
+        // Everything happens in a folder of its own under /tmp, and is deleted after.
+        var root = "/tmp/greenglow-test-" + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(6)).ToLowerInvariant();
+        var file = root + "/sub/deeper/data.bin";
+        var data = System.Security.Cryptography.RandomNumberGenerator.GetBytes(150_000);
+        try
+        {
+            await client.EnsureFolderAsync(root + "/sub/deeper", cancel.Token);
+            await client.EnsureFolderAsync(root + "/sub", cancel.Token);
+            Assert.Equal(data.Length, await client.UploadAsync(file, new MemoryStream(data), replace: false, 1208, cancel.Token));
+
+            using (var back = new MemoryStream())
+            {
+                await client.DownloadAsync(file, back, cancel.Token);
+                Assert.Equal(data, back.ToArray());
+            }
+            var listed = Assert.Single(await client.ListAsync(root + "/sub/deeper", 0, cancel.Token));
+            Assert.Equal(("data.bin", false, (long)data.Length), (listed.Name, listed.Folder, listed.Size));
+
+            var there = await Assert.ThrowsAsync<FileServerException>(() =>
+                client.UploadAsync(file, new MemoryStream(data[..10]), replace: false, 1208, cancel.Token));
+            Assert.Equal(FileServerClient.AlreadyThere, there.Code);
+            Assert.Equal(10, await client.UploadAsync(file, new MemoryStream(data[..10]), replace: true, 1208, cancel.Token));
+            var replaced = await client.OpenForReadAsync(file, cancel.Token);
+            await client.CloseAsync(replaced.Handle, cancel.Token);
+            Assert.Equal(10, replaced.Size);
+
+            var noFolder = await Assert.ThrowsAsync<FileServerException>(() =>
+                client.UploadAsync(root + "/missing/x.bin", new MemoryStream(data[..10]), replace: false, 1208, cancel.Token));
+            Assert.Equal(FileServerClient.NoSuchFolder, noFolder.Code);
+            var notEmpty = await Assert.ThrowsAsync<FileServerException>(() => client.DeleteFolderAsync(root + "/sub", cancel.Token));
+            Console.WriteLine($"uploaded {data.Length} bytes; deleting a folder that isn't empty: {notEmpty.Code}");
+        }
+        finally
+        {
+            foreach (var path in new[] { file })
+                try { await client.DeleteFileAsync(path, cancel.Token); } catch (FileServerException) { }
+            foreach (var path in new[] { root + "/sub/deeper", root + "/sub", root })
+                try { await client.DeleteFolderAsync(path, cancel.Token); } catch (FileServerException) { }
+        }
+        var gone = await Assert.ThrowsAsync<FileServerException>(() => client.ListAsync(root, 0, cancel.Token));
+        Assert.Equal(FileServerClient.NoSuchFolder, gone.Code);
+    }
+
+    [Fact]
     public async Task AMissingFileOrFolderIsRefusedWithItsCode()
     {
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(60));

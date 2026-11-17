@@ -85,6 +85,15 @@ public sealed class FilesOptions
 {
     /// <summary>How long, in minutes, an unused file server sign-on lasts.</summary>
     public int IdleMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// The CCSID a file the Files panel creates is tagged with (1208: UTF-8). The bytes are never
+    /// converted; the tag says how an IBM i program should read them.
+    /// </summary>
+    public int UploadCcsid { get; set; } = 1208;
+
+    /// <summary>The largest file one upload may send, in megabytes.</summary>
+    public int MaxUploadMegabytes { get; set; } = 2048;
 }
 
 public sealed class PrinterOptions

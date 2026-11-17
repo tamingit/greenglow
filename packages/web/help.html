@@ -646,8 +646,9 @@
           <section id="files">
             <h2>Files</h2>
             <p>
-              Browse the integrated file system (IFS) of the system of the tab showing, and download
-              files from it. You see and read only what your IBM i profile may.
+              Browse the integrated file system (IFS) of the system of the tab showing, download
+              files from it and upload files and folders to it. You see, read and write only what
+              your IBM i profile may.
             </p>
             <ol>
               <li>
@@ -676,13 +677,25 @@
                 not authorised.
               </li>
               <li>
+                To upload, open the folder to put them in, then choose
+                <strong>Upload files…</strong> (several at once) or
+                <strong>Upload folder…</strong> (a folder with everything in it), or drop files and
+                folders on the list. Folders that aren't there yet are made. A file of the same name
+                that is already there is left as it is and listed as <em>Already there</em>; tick
+                <strong>Replace files that are already there</strong> first, or choose
+                <strong>Replace</strong> afterwards, to write over it. <strong>Stop</strong> stops
+                after the file being sent; a file stopped part way isn't left behind.
+              </li>
+              <li>
                 The files you downloaded are listed under <strong>Downloaded</strong>, to download
                 again.
               </li>
             </ol>
             <p>
               A folder shows its first 2,000 entries. A symbolic link shows its own size; it
-              downloads what it points to. Uploading is still to come.
+              downloads what it points to. An uploaded file is copied byte for byte and tagged as
+              UTF-8 text (CCSID 1208) unless your administrator chose another; a file can be up to 2
+              GB unless they chose another limit.
             </p>
           </section>
 

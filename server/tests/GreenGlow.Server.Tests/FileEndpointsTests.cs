@@ -59,6 +59,17 @@ public sealed class FileEndpointsTests
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
             Assert.Equal("signon-needed", await Error(refused));
         }
+        var upload = await client.PutAsync("/api/files/test/upload?path=/tmp/a.bin", new ByteArrayContent([1, 2, 3]));
+        Assert.Equal("signon-needed", await Error(upload));
+        Assert.Equal("signon-needed", await Error(await client.PostAsync("/api/files/test/folder?path=/tmp/a", null)));
+        Assert.Equal("signon-needed", await Error(await client.DeleteAsync("/api/files/test/entry?path=/tmp/a")));
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.PutAsync("/api/files/nowhere/upload?path=/tmp/a.bin", new ByteArrayContent([1]))).StatusCode);
+        // Without an allowed Origin, nothing is sent at all.
+        var noOrigin = await factory.SignedInClientAsync();
+        noOrigin.DefaultRequestHeaders.Remove("Origin");
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await noOrigin.PutAsync("/api/files/test/upload?path=/tmp/a.bin", new ByteArrayContent([1]))).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync("/api/files/test/signon")).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync("/api/files/test")).StatusCode);
     }
@@ -142,9 +153,30 @@ public sealed class FileEndpointsTests
         var folder = await client.GetAsync("/api/files/live/info?path=/QOpenSys/usr/bin");
         Assert.Equal("folder", await Error(folder));
 
+        // An upload makes the folders on the way; one already there is refused, then replaced.
+        var root = "/tmp/greenglow-test-" + Guid.NewGuid().ToString("N")[..12];
+        var uploaded = await client.PutAsync($"/api/files/live/upload?path={Uri.EscapeDataString(root + "/in/a.txt")}",
+            new ByteArrayContent("placeholder"u8.ToArray()));
+        Assert.Equal(11, (await Json(uploaded)).GetProperty("size").GetInt64());
+        var again = await client.PutAsync($"/api/files/live/upload?path={Uri.EscapeDataString(root + "/in/a.txt")}",
+            new ByteArrayContent("x"u8.ToArray()));
+        Assert.Equal("exists", await Error(again));
+        Assert.Equal(1, (await Json(await client.PutAsync(
+            $"/api/files/live/upload?path={Uri.EscapeDataString(root + "/in/a.txt")}&replace=true",
+            new ByteArrayContent("x"u8.ToArray())))).GetProperty("size").GetInt64());
+        await Json(await client.PostAsync($"/api/files/live/folder?path={Uri.EscapeDataString(root + "/empty")}", null));
+        var inRoot = (await Json(await client.GetAsync($"/api/files/live/list?path={Uri.EscapeDataString(root)}")))
+            .GetProperty("entries").EnumerateArray().Select(e => e.GetProperty("name").GetString()).ToList();
+        Assert.Equal(["empty", "in"], inRoot);
+        Assert.Equal("not-empty", await Error(await client.DeleteAsync($"/api/files/live/entry?folder=true&path={Uri.EscapeDataString(root)}")));
+        foreach (var (made, isFolder) in new[] { (root + "/in/a.txt", false), (root + "/in", true), (root + "/empty", true), (root, true) })
+            Assert.Equal(HttpStatusCode.NoContent,
+                (await client.DeleteAsync($"/api/files/live/entry?folder={(isFolder ? "true" : "false")}&path={Uri.EscapeDataString(made)}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/files/live/list?path={Uri.EscapeDataString(root)}")).StatusCode);
+
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync("/api/files/live/signon")).StatusCode);
         var row = Assert.Single(await FileRowsAsync(factory));
-        Assert.Equal(1, row.FilesOpened);
+        Assert.Equal(3, row.FilesOpened);
         Assert.Equal("signed off", row.EndReason);
     }
 }

@@ -56,7 +56,7 @@ function what(row: Row): string {
   }
   if (row.kind === 'files') {
     const files = row.filesOpened ?? 0;
-    return `Files (${files} ${files === 1 ? 'file' : 'files'} downloaded)`;
+    return `Files (${files} ${files === 1 ? 'file' : 'files'} transferred)`;
   }
   if (row.kind === 'node') return 'Server node';
   if (row.kind === 'certificate')
