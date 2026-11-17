@@ -89,6 +89,49 @@ public static class FileEndpoints
             return Results.NoContent();
         });
 
+        // A folder's entries, folders first, then by name; at most MaxEntries (truncated says so).
+        files.MapGet("/list", async (string connection, string? path, HttpContext context, Access access,
+            FileSessions sessions) =>
+        {
+            var user = CurrentUser.From(context.User)!;
+            if (await access.FindAsync(user, connection) is null) return NoSystem();
+            if (sessions.Find(user.Id, connection) is not { } session) return SignOnNeeded();
+            var folder = FolderPath(path);
+            try
+            {
+                FileServerClient.PathBytes(folder);
+            }
+            catch (ArgumentException e)
+            {
+                return Results.BadRequest(new { error = "path", message = e.Message });
+            }
+            using var use = await session.UseAsync(context.RequestAborted);
+            try
+            {
+                // One more than shown, to know whether there were more.
+                var entries = await session.Client.ListAsync(folder, MaxEntries + 1, CancellationToken.None);
+                return Results.Json(new
+                {
+                    path = folder,
+                    truncated = entries.Count > MaxEntries,
+                    entries = entries
+                        .OrderByDescending(e => e.Folder)
+                        .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
+                        .Take(MaxEntries)
+                        .Select(e => new { name = e.Name, folder = e.Folder, size = e.Folder ? (long?)null : e.Size, modified = e.Modified }),
+                });
+            }
+            catch (FileServerException e) when (e.Code >= 0)
+            {
+                return Refused(e);
+            }
+            catch (Exception e) when (IsLost(e))
+            {
+                use.Dispose();
+                return await LostAsync(sessions, session, e);
+            }
+        });
+
         // Whether a path is a file the user may read, and its size: the panel asks before it
         // downloads, so a refusal shows in the panel instead of as a failed download.
         files.MapGet("/info", async (string connection, string? path, HttpContext context, Access access,
@@ -190,6 +233,26 @@ public static class FileEndpoints
         });
 
         return api;
+    }
+
+    /// <summary>The most entries a listing shows.</summary>
+    public const int MaxEntries = 2000;
+
+    /// <summary>A folder's path as listed: absolute, no trailing slash but the root's, . and .. done.</summary>
+    public static string FolderPath(string? path)
+    {
+        var parts = new List<string>();
+        foreach (var part in (path ?? "").Trim().Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part == ".") continue;
+            if (part == "..")
+            {
+                if (parts.Count > 0) parts.RemoveAt(parts.Count - 1);
+                continue;
+            }
+            parts.Add(part);
+        }
+        return (path ?? "").TrimStart().StartsWith('/') || parts.Count == 0 ? "/" + string.Join('/', parts) : string.Join('/', parts);
     }
 
     /// <summary>The name a download is saved as: the path's last part.</summary>

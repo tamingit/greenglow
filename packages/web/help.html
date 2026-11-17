@@ -646,8 +646,8 @@
           <section id="files">
             <h2>Files</h2>
             <p>
-              Download a file from the integrated file system (IFS) of the system of the tab
-              showing, by its path. You can read only what your IBM i profile may read.
+              Browse the integrated file system (IFS) of the system of the tab showing, and download
+              files from it. You see and read only what your IBM i profile may.
             </p>
             <ol>
               <li>
@@ -663,16 +663,27 @@
                 again.
               </li>
               <li>
-                Type the file's full path, such as <code>/home/YOURUSER/report.csv</code>, and press
-                <kbd>Enter</kbd> or <strong>Download</strong>. The browser saves it with its own
-                name. If it can't be read, the panel says why: no such file or folder, a folder, or
+                It opens your home folder (<code>/home/YOURUSER</code>), or the root when you have
+                none. Folders come first, with a <code>/</code> after their names; files show their
+                size and when they changed. Move with the arrow keys; <kbd>Enter</kbd> or a click
+                opens a folder or downloads a file. <strong>↑ Up</strong> or <kbd>Backspace</kbd>
+                goes to the folder this one is in.
+              </li>
+              <li>
+                Or type a path in the box at the top and press <kbd>Enter</kbd> or
+                <strong>Go</strong>: a folder opens, a file downloads. The browser saves a file with
+                its own name. If it can't be read, the panel says why: no such file or folder, or
                 not authorised.
               </li>
               <li>
-                The last few paths are listed under <strong>Recent</strong>, to download again.
+                The files you downloaded are listed under <strong>Downloaded</strong>, to download
+                again.
               </li>
             </ol>
-            <p>Uploading and browsing folders are still to come.</p>
+            <p>
+              A folder shows its first 2,000 entries. A symbolic link shows its own size; it
+              downloads what it points to. Uploading is still to come.
+            </p>
           </section>
 
           <section id="looks">

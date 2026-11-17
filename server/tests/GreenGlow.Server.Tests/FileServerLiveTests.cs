@@ -52,6 +52,34 @@ public sealed class FileServerLiveTests
     }
 
     [Fact]
+    public async Task FoldersListWithTheirFoldersAndFiles()
+    {
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        await using var client = await ConnectAsync(cancel.Token);
+        if (client is null) return;
+
+        var usr = await client.ListAsync("/QOpenSys/usr", 0, cancel.Token);
+        Assert.Contains(usr, e => e.Name == "bin" && e.Folder);
+        Assert.DoesNotContain(usr, e => e.Name is "." or "..");
+
+        var bin = await client.ListAsync("/QOpenSys/usr/bin/", 0, cancel.Token);
+        var ls = Assert.Single(bin, e => e.Name == "ls");
+        Assert.False(ls.Folder);
+        Assert.True(ls.Modified.Year > 1990);
+        Console.WriteLine($"/QOpenSys/usr has {usr.Count} entries, /QOpenSys/usr/bin {bin.Count}");
+
+        var ten = await client.ListAsync("/QOpenSys/usr/bin", 10, cancel.Token);
+        Assert.Equal(10, ten.Count);
+
+        var missing = await Assert.ThrowsAsync<FileServerException>(() => client.ListAsync("/greenglow-no-such-folder", 0, cancel.Token));
+        Assert.Equal(3, missing.Code);
+
+        // The connection is still in step after the chains.
+        var opened = await client.OpenForReadAsync(SystemFile, cancel.Token);
+        await client.CloseAsync(opened.Handle, cancel.Token);
+    }
+
+    [Fact]
     public async Task AMissingFileOrFolderIsRefusedWithItsCode()
     {
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(60));

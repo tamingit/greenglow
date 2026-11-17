@@ -24,3 +24,31 @@
   font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
+
+.files-where {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.4rem;
+}
+
+.files-where .files-path {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.files-tools {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.files-entries {
+  max-height: calc(100vh - 22rem);
+  overflow-y: auto;
+}
+
+.files-recent:empty {
+  display: none;
+}

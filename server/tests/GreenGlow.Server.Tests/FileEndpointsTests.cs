@@ -53,7 +53,7 @@ public sealed class FileEndpointsTests
 
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/files/nowhere")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/files/nowhere/download?path=/a")).StatusCode);
-        foreach (var path in new[] { "/api/files/test/info?path=/a", "/api/files/test/download?path=/a" })
+        foreach (var path in new[] { "/api/files/test/info?path=/a", "/api/files/test/download?path=/a", "/api/files/test/list?path=/" })
         {
             var refused = await client.GetAsync(path);
             Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
@@ -77,6 +77,15 @@ public sealed class FileEndpointsTests
         Assert.Equal("PRTUSER", row.IbmUser);
         Assert.StartsWith("sign-on failed", row.EndReason);
     }
+
+    [Theory]
+    [InlineData("", "/")]
+    [InlineData("/", "/")]
+    [InlineData("/home/me/", "/home/me")]
+    [InlineData("//home//me/./docs/../", "/home/me")]
+    [InlineData("/../..", "/")]
+    [InlineData("home/me", "home/me")]
+    public void AFolderPathIsTidied(string path, string folder) => Assert.Equal(folder, FileEndpoints.FolderPath(path));
 
     [Theory]
     [InlineData("/home/me/report.csv", "report.csv")]
@@ -115,6 +124,18 @@ public sealed class FileEndpointsTests
         Assert.Equal(size, bytes.Length);
         Assert.Equal([0x01, 0xF7], bytes[..2]);
         Console.WriteLine($"downloaded {bytes.Length} bytes through the API");
+
+        var listing = await Json(await client.GetAsync("/api/files/live/list?path=/QOpenSys/usr/bin/"));
+        Assert.Equal("/QOpenSys/usr/bin", listing.GetProperty("path").GetString());
+        var entries = listing.GetProperty("entries").EnumerateArray().ToList();
+        Assert.Contains(entries, e => e.GetProperty("name").GetString() == "ls" && !e.GetProperty("folder").GetBoolean());
+        var usr = (await Json(await client.GetAsync("/api/files/live/list?path=/QOpenSys/usr"))).GetProperty("entries").EnumerateArray().ToList();
+        var bin = Assert.Single(usr, e => e.GetProperty("name").GetString() == "bin");
+        Assert.True(bin.GetProperty("folder").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, bin.GetProperty("size").ValueKind);
+        // Folders come first.
+        Assert.True(usr.TakeWhile(e => e.GetProperty("folder").GetBoolean()).Count() >= usr.Count(e => e.GetProperty("folder").GetBoolean()));
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/files/live/list?path=/greenglow-no-such-folder")).StatusCode);
 
         var missing = await client.GetAsync("/api/files/live/info?path=/greenglow-no-such-folder/x");
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);

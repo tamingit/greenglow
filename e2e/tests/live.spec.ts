@@ -135,7 +135,7 @@ test.describe('live test system', () => {
     await expect(viewer.locator('#terminal .offline')).toBeVisible({ timeout: 30_000 });
   });
 
-  test('the Files panel downloads a system file from the IFS, and says why another fails', async ({
+  test('the Files panel browses folders, downloads a system file, and says why another fails', async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -154,15 +154,27 @@ test.describe('live test system', () => {
     await expect(panel).toContainText(`Signed on as ${user!.toUpperCase()}`, { timeout: 30_000 });
     expect(await panel.getByLabel('Password').count()).toBe(0);
 
-    // A PASE program every IBM i with PASE has: it downloads with its own name.
-    await panel.getByLabel('Path of a file in the IFS').fill('/QOpenSys/usr/bin/ls');
+    // It lists a folder at once: the user's home folder, or the root.
+    await expect(panel.getByRole('status')).toHaveText(/folder|file|empty/, { timeout: 30_000 });
+
+    // A folder typed in opens; its folders come first, with a / after their names.
+    const where = panel.getByLabel('Path of a folder or file');
+    await where.fill('/QOpenSys/usr');
+    await panel.getByRole('button', { name: 'Go' }).click();
+    const usr = panel.getByRole('list', { name: 'Contents of /QOpenSys/usr' });
+    await expect(usr.getByRole('button', { name: /^bin\// })).toBeVisible();
+    await usr.getByRole('button', { name: /^bin\// }).click();
+    const bin = panel.getByRole('list', { name: 'Contents of /QOpenSys/usr/bin' });
+    await expect(bin).toBeVisible();
+    await expect(where).toHaveValue('/QOpenSys/usr/bin');
+
+    // A PASE program every IBM i with PASE has: a click downloads it with its own name.
     const downloading = page.waitForEvent('download');
-    await panel.getByRole('button', { name: 'Download' }).click();
+    await bin.getByRole('button', { name: /^ls\b/ }).first().click();
     const download = await downloading;
     expect(download.suggestedFilename()).toBe('ls');
-    const saved = await download.path();
     const { readFile } = await import('node:fs/promises');
-    const bytes = await readFile(saved);
+    const bytes = await readFile(await download.path());
     expect(bytes.length).toBeGreaterThan(1000);
     expect([...bytes.subarray(0, 2)]).toEqual([0x01, 0xf7]);
     await expect(panel.getByRole('status')).toContainText('Downloading ls');
@@ -170,10 +182,15 @@ test.describe('live test system', () => {
       '/QOpenSys/usr/bin/ls',
     );
 
-    // A path that isn't there says so in the panel; nothing downloads.
-    await panel.getByLabel('Path of a file in the IFS').fill('/greenglow-no-such-folder/x.txt');
-    await panel.getByRole('button', { name: 'Download' }).click();
+    // Up goes back to the folder this one is in.
+    await panel.getByRole('button', { name: '↑ Up' }).click();
+    await expect(usr).toBeVisible();
+
+    // A path that isn't there says so in the panel; nothing downloads, and the folder stays.
+    await where.fill('/greenglow-no-such-folder/x.txt');
+    await panel.getByRole('button', { name: 'Go' }).click();
     await expect(panel.getByRole('status')).toHaveText('There is no such folder.');
+    await expect(usr).toBeVisible();
 
     await panel.getByRole('button', { name: 'Sign off' }).click();
     await expect(panel.getByLabel('IBM i user')).toBeVisible();
