@@ -130,6 +130,46 @@ public sealed class FileServerLiveTests
     }
 
     [Fact]
+    public async Task FilesAndFoldersRenameAndATreeDeletes()
+    {
+        using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(90));
+        await using var client = await ConnectAsync(cancel.Token);
+        if (client is null) return;
+
+        var root = "/tmp/greenglow-test-" + Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(6)).ToLowerInvariant();
+        try
+        {
+            await client.EnsureFolderAsync(root + "/a/b", cancel.Token);
+            await client.UploadAsync(root + "/a/one.txt", new MemoryStream("placeholder"u8.ToArray()), false, 1208, cancel.Token);
+            await client.UploadAsync(root + "/a/b/two.txt", new MemoryStream("placeholder"u8.ToArray()), false, 1208, cancel.Token);
+            await client.UploadAsync(root + "/a/three.txt", new MemoryStream("x"u8.ToArray()), false, 1208, cancel.Token);
+
+            await client.RenameAsync(root + "/a/one.txt", root + "/a/uno.txt", cancel.Token);
+            await client.RenameAsync(root + "/a/b", root + "/a/bee", cancel.Token);
+            var taken = await Assert.ThrowsAsync<FileServerException>(() =>
+                client.RenameAsync(root + "/a/three.txt", root + "/a/uno.txt", cancel.Token));
+            Console.WriteLine($"renaming onto a name in use: {taken.Code}");
+            Assert.Equal(FileServerClient.AlreadyThere, taken.Code);
+            var names = (await client.ListAsync(root + "/a", 0, cancel.Token)).Select(e => e.Name).Order().ToList();
+            Assert.Equal(["bee", "three.txt", "uno.txt"], names);
+
+            // An empty folder lists as empty, not as missing.
+            await client.CreateFolderAsync(root + "/a/empty", cancel.Token);
+            Assert.Empty(await client.ListAsync(root + "/a/empty", 0, cancel.Token));
+
+            var made = await Assert.ThrowsAsync<FileServerException>(() => client.CreateFolderAsync(root + "/a", cancel.Token));
+            Assert.Equal(FileServerClient.AlreadyThere, made.Code);
+            Assert.Equal(7, await client.DeleteTreeAsync(root, cancel.Token));
+        }
+        finally
+        {
+            try { await client.DeleteTreeAsync(root, cancel.Token); } catch (FileServerException) { }
+        }
+        Assert.Equal(FileServerClient.NoSuchFolder,
+            (await Assert.ThrowsAsync<FileServerException>(() => client.ListAsync(root, 0, cancel.Token))).Code);
+    }
+
+    [Fact]
     public async Task AMissingFileOrFolderIsRefusedWithItsCode()
     {
         using var cancel = new CancellationTokenSource(TimeSpan.FromSeconds(60));

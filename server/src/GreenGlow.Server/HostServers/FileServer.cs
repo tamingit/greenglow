@@ -32,7 +32,8 @@ public sealed record FolderEntry(string Name, bool Folder, long Size, DateTimeOf
 ///
 /// Verified against a real IBM i (datastream level 24): exchange (22, reply 8009), open (2,
 /// reply 8002), read (3, reply 8003; no data at the end of the file), close (9, reply 8004) and
-/// list (10: a chain of 8005 replies, one per entry, ended by return code 18).
+/// list (10: a chain of 8005 replies, one per entry, ended by return code 18; an empty folder is
+/// return code 2 alone).
 /// </summary>
 public sealed class FileServerClient : IAsyncDisposable
 {
@@ -45,7 +46,7 @@ public sealed class FileServerClient : IAsyncDisposable
     public const int MaxPathLength = 4096;
 
     private const ushort ExchangeRequest = 22, OpenRequest = 2, ReadRequest = 3, WriteRequest = 4, CloseRequest = 9, ListRequest = 10,
-        DeleteFileRequest = 12, CreateFolderRequest = 13, DeleteFolderRequest = 14;
+        DeleteFileRequest = 12, CreateFolderRequest = 13, DeleteFolderRequest = 14, RenameRequest = 15;
     private const ushort ReturnCodeReply = 0x8001, OpenReply = 0x8002, ReadReply = 0x8003, CloseReply = 0x8004, ListReply = 0x8005,
         ExchangeReply = 0x8009, WriteReply = 0x800B;
 
@@ -62,6 +63,9 @@ public sealed class FileServerClient : IAsyncDisposable
 
     /// <summary>The return code that ends a listing: no more entries.</summary>
     public const int NoMoreFiles = 18;
+
+    /// <summary>The return code for a listing that matched nothing: the folder is there, and empty.</summary>
+    public const int NothingMatched = 2;
 
     /// <summary>The fixed attribute of a folder (as in DOS: 0x10).</summary>
     private const int FolderAttribute = 0x10;
@@ -159,7 +163,9 @@ public sealed class FileServerClient : IAsyncDisposable
             if (id == ReturnCodeReply)
             {
                 var code = reply.Length >= 24 ? BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(22)) : -1;
-                if (code is 0 or NoMoreFiles) return entries;
+                // 18 ends a listing; 2 (no file matched the pattern) is how the IBM i answers for
+                // an empty folder. 3, no such folder, is a refusal.
+                if (code is 0 or NoMoreFiles or NothingMatched) return entries;
                 throw new FileServerException(code, Describe(code));
             }
             if (id != ListReply) throw Malformed($"reply {id:X4}");
@@ -282,6 +288,37 @@ public sealed class FileServerClient : IAsyncDisposable
     {
         await _host.SendAsync(DeleteFolder(_host.NextCorrelation(), PathBytes(path), (ushort)Ccsid), cancel);
         await ReturnCodeAsync(cancel);
+    }
+
+    /// <summary>
+    /// Renames (or moves) a file or folder. A name already in use is refused (FileServerException
+    /// 4): nothing is replaced.
+    /// </summary>
+    public async Task RenameAsync(string path, string newPath, CancellationToken cancel)
+    {
+        await _host.SendAsync(Rename(_host.NextCorrelation(), PathBytes(path), PathBytes(newPath), (ushort)Ccsid), cancel);
+        await ReturnCodeAsync(cancel);
+    }
+
+    /// <summary>
+    /// Deletes a folder and everything in it: each file (or link) first, then each folder, from
+    /// the deepest up. Stops at the first refusal, which is thrown. Returns how many entries went.
+    /// </summary>
+    public async Task<int> DeleteTreeAsync(string folder, CancellationToken cancel)
+    {
+        var deleted = 0;
+        foreach (var entry in await ListAsync(folder, 0, cancel))
+        {
+            var path = folder.TrimEnd('/') + "/" + entry.Name;
+            if (entry.Folder) deleted += await DeleteTreeAsync(path, cancel);
+            else
+            {
+                await DeleteFileAsync(path, cancel);
+                deleted++;
+            }
+        }
+        await DeleteFolderAsync(folder, cancel);
+        return deleted + 1;
     }
 
     /// <summary>A request answered by a bare return code (8001): 0 is done, anything else is thrown.</summary>
@@ -512,6 +549,29 @@ public sealed class FileServerClient : IAsyncDisposable
         BinaryPrimitives.WriteInt32BigEndian(span[30..], path.Length + 6);
         BinaryPrimitives.WriteUInt16BigEndian(span[34..], 1);
         path.CopyTo(frame, 36);
+        return frame;
+    }
+
+    /// <summary>
+    /// Rename (15): template 16; the two names' CCSIDs at 22 and 24, 1 at 26 and at 30, replace 0
+    /// at 34 (never replace); the old name as a length at 36, code point 3 at 40, the name from 42;
+    /// then the new name as a length, code point 4 and the name.
+    /// </summary>
+    public static byte[] Rename(int correlation, byte[] path, byte[] newPath, ushort ccsid)
+    {
+        var frame = NewFrame(42 + path.Length + 6 + newPath.Length, correlation, 16, RenameRequest);
+        var span = frame.AsSpan();
+        BinaryPrimitives.WriteUInt16BigEndian(span[22..], ccsid);
+        BinaryPrimitives.WriteUInt16BigEndian(span[24..], ccsid);
+        BinaryPrimitives.WriteInt32BigEndian(span[26..], 1);
+        BinaryPrimitives.WriteInt32BigEndian(span[30..], 1);
+        BinaryPrimitives.WriteInt32BigEndian(span[36..], path.Length + 6);
+        BinaryPrimitives.WriteUInt16BigEndian(span[40..], 3);
+        path.CopyTo(frame, 42);
+        var at = 42 + path.Length;
+        BinaryPrimitives.WriteInt32BigEndian(span[at..], newPath.Length + 6);
+        BinaryPrimitives.WriteUInt16BigEndian(span[(at + 4)..], 4);
+        newPath.CopyTo(frame, at + 6);
         return frame;
     }
 

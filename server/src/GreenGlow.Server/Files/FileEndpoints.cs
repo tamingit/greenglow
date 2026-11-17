@@ -238,8 +238,9 @@ public static class FileEndpoints
             }
         });
 
-        // A folder, and the folders on the way to it, made when they aren't there.
-        files.MapPost("/folder", async (string connection, string? path, HttpContext context, Access access,
+        // A folder, and the folders on the way to it, made when they aren't there. With strict=true
+        // (the panel's New folder), a name already in use is refused instead.
+        files.MapPost("/folder", async (string connection, string? path, bool? strict, HttpContext context, Access access,
             FileSessions sessions) =>
         {
             var user = CurrentUser.From(context.User)!;
@@ -259,8 +260,13 @@ public static class FileEndpoints
             using var use = await session.UseAsync(context.RequestAborted);
             try
             {
-                await session.Client.EnsureFolderAsync(folder, CancellationToken.None);
+                if (strict == true) await session.Client.CreateFolderAsync(folder, CancellationToken.None);
+                else await session.Client.EnsureFolderAsync(folder, CancellationToken.None);
                 return Results.Json(new { path = folder });
+            }
+            catch (FileServerException e) when (e.Code == FileServerClient.AlreadyThere)
+            {
+                return Results.Conflict(new { error = "exists", message = $"{FileName(folder)} is already there." });
             }
             catch (FileServerException e) when (e.Code >= 0)
             {
@@ -273,22 +279,75 @@ public static class FileEndpoints
             }
         });
 
-        // One file, or one empty folder, deleted (folder=true for a folder): what the user's own
-        // profile may delete. The panel has no button for it yet; the live tests clean up with it.
-        files.MapDelete("/entry", async (string connection, string? path, bool? folder, HttpContext context, Access access,
+        // A file or folder renamed in its folder: name is the new name, with no slash.
+        files.MapPost("/rename", async (string connection, string? path, string? name, HttpContext context, Access access,
             FileSessions sessions) =>
         {
             var user = CurrentUser.From(context.User)!;
             if (await access.FindAsync(user, connection) is null) return NoSystem();
             if (sessions.Find(user.Id, connection) is not { } session) return SignOnNeeded();
-            var target = FolderPath(path);
-            if (target == "/" || !target.StartsWith('/')) return Results.BadRequest(new { error = "path", message = "Give the path of a file or an empty folder." });
+            var from = FolderPath(path);
+            var newName = name?.Trim() ?? "";
+            if (from == "/" || !from.StartsWith('/'))
+                return Results.BadRequest(new { error = "path", message = "Give the path of the file or folder to rename." });
+            if (newName.Length == 0 || newName.Contains('/') || newName is "." or ".." || newName.Contains('\0'))
+                return Results.BadRequest(new { error = "name", message = "A name can't be empty, . or .., or hold a /." });
+            if (Protected(from))
+                return Results.Json(new { error = "protected", message = "GreenGlow doesn't rename / or a folder directly in it." },
+                    statusCode: StatusCodes.Status403Forbidden);
+            var to = from[..(from.LastIndexOf('/') + 1)] + newName;
+            if (to == from) return Results.Json(new { path = to });
+            try
+            {
+                FileServerClient.PathBytes(to);
+            }
+            catch (ArgumentException e)
+            {
+                return Results.BadRequest(new { error = "name", message = e.Message });
+            }
             using var use = await session.UseAsync(context.RequestAborted);
             try
             {
-                if (folder == true) await session.Client.DeleteFolderAsync(target, CancellationToken.None);
-                else await session.Client.DeleteFileAsync(target, CancellationToken.None);
-                return Results.NoContent();
+                await session.Client.RenameAsync(from, to, CancellationToken.None);
+                return Results.Json(new { path = to });
+            }
+            catch (FileServerException e) when (e.Code == FileServerClient.AlreadyThere)
+            {
+                return Results.Conflict(new { error = "exists", message = $"{newName} is already there." });
+            }
+            catch (FileServerException e) when (e.Code >= 0)
+            {
+                return Refused(e);
+            }
+            catch (Exception e) when (IsLost(e))
+            {
+                use.Dispose();
+                return await LostAsync(sessions, session, e);
+            }
+        });
+
+        // A file deleted, or a folder (folder=true): an empty one, or with recursive=true one and
+        // everything in it. Never / or a folder directly in it (such as /QSYS.LIB or /home): what
+        // the IBM i would let a powerful profile do, the panel doesn't offer.
+        files.MapDelete("/entry", async (string connection, string? path, bool? folder, bool? recursive, HttpContext context,
+            Access access, FileSessions sessions) =>
+        {
+            var user = CurrentUser.From(context.User)!;
+            if (await access.FindAsync(user, connection) is null) return NoSystem();
+            if (sessions.Find(user.Id, connection) is not { } session) return SignOnNeeded();
+            var target = FolderPath(path);
+            if (!target.StartsWith('/')) return Results.BadRequest(new { error = "path", message = "Give the path of a file or folder." });
+            if (Protected(target))
+                return Results.Json(new { error = "protected", message = "GreenGlow doesn't delete / or a folder directly in it." },
+                    statusCode: StatusCodes.Status403Forbidden);
+            using var use = await session.UseAsync(context.RequestAborted);
+            try
+            {
+                var deleted = 1;
+                if (folder != true) await session.Client.DeleteFileAsync(target, CancellationToken.None);
+                else if (recursive == true) deleted = await session.Client.DeleteTreeAsync(target, CancellationToken.None);
+                else await session.Client.DeleteFolderAsync(target, CancellationToken.None);
+                return Results.Json(new { path = target, deleted });
             }
             catch (FileServerException e) when (e.Code == 9)
             {
@@ -406,6 +465,9 @@ public static class FileEndpoints
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
+
+    /// <summary>A path the panel never deletes: the root, or a folder directly in it.</summary>
+    public static bool Protected(string path) => path.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries).Length <= 1;
 
     /// <summary>The most entries a listing shows.</summary>
     public const int MaxEntries = 2000;

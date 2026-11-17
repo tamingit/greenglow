@@ -181,6 +181,26 @@ public sealed class FileServerTests
     }
 
     [Fact]
+    public void RenameCarriesTheOldNameThenTheNew()
+    {
+        var from = FileServerClient.PathBytes("/tmp/a.txt");
+        var to = FileServerClient.PathBytes("/tmp/longer-b.txt");
+        var frame = FileServerClient.Rename(13, from, to, 1200);
+        Header(frame, 13, 16, 15);
+        Assert.Equal(42 + from.Length + 6 + to.Length, frame.Length);
+        Assert.Equal((1200, 1200), (Short(frame, 22), Short(frame, 24)));
+        Assert.Equal((1, 1), (Int(frame, 26), Int(frame, 30)));
+        Assert.Equal(0, Short(frame, 34));
+        Assert.Equal(from.Length + 6, Int(frame, 36));
+        Assert.Equal(3, Short(frame, 40));
+        Assert.Equal(from, frame[42..(42 + from.Length)]);
+        var at = 42 + from.Length;
+        Assert.Equal(to.Length + 6, Int(frame, at));
+        Assert.Equal(4, Short(frame, at + 4));
+        Assert.Equal(to, frame[(at + 6)..]);
+    }
+
+    [Fact]
     public void DeleteFolderHasItsFlagsBeforeTheName()
     {
         var path = FileServerClient.PathBytes("/tmp/x");

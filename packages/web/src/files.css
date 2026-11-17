@@ -96,3 +96,49 @@
 .files-upload[data-state='exists'] .printer-file-detail {
   color: var(--status-error);
 }
+
+.files-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.files-row .files-entry {
+  flex: 1;
+  min-width: 0;
+}
+
+.files-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+}
+
+.files-action {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+.files-ask:empty {
+  display: none;
+}
+
+.files-ask-form {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  padding: 0.6rem;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: var(--page-panel);
+}
+
+.files-ask-text {
+  margin: 0;
+}
+
+.files-danger {
+  border-color: var(--status-error);
+  color: var(--status-error);
+}
