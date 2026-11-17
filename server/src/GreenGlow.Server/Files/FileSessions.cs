@@ -39,11 +39,12 @@ public sealed class FileSession
 
     internal DateTimeOffset LastUsed => new(Interlocked.Read(ref _lastUsed), TimeSpan.Zero);
 
-    internal int Downloaded => Volatile.Read(ref _downloaded);
+    /// <summary>Files downloaded or uploaded.</summary>
+    internal int Transfers => Volatile.Read(ref _downloaded);
 
     internal void Touch(DateTimeOffset now) => Interlocked.Exchange(ref _lastUsed, now.UtcTicks);
 
-    internal void Downloading() => Interlocked.Increment(ref _downloaded);
+    internal void Transferred() => Interlocked.Increment(ref _downloaded);
 
     /// <summary>True the first time only: the caller ends it.</summary>
     internal bool Ending() => Interlocked.Exchange(ref _ended, 1) == 0;
@@ -70,7 +71,7 @@ public sealed class FileSession
 /// The file sessions, one per GreenGlow user and system, held in memory only. Each ends after
 /// Files:IdleMinutes (15) without use, when its user signs off, when its connection is lost, or
 /// when the server stops; a new one signs on again. Each is a row in the connection log (kind
-/// files) with the IBM i user and how many files were downloaded; refused sign-ons are rows too.
+/// files) with the IBM i user and how many files were downloaded or uploaded; refused sign-ons are rows too.
 /// No file's path, name or contents is logged.
 /// </summary>
 public sealed class FileSessions : IAsyncDisposable
@@ -156,7 +157,7 @@ public sealed class FileSessions : IAsyncDisposable
             _sessions.TryRemove(entry);
         if (!session.Ending()) return;
         await session.Client.DisposeAsync();
-        await _log.UpdateAsync(session.LogId, row => row.FilesOpened = session.Downloaded);
+        await _log.UpdateAsync(session.LogId, row => row.FilesOpened = session.Transfers);
         await _log.EndAsync(session.LogId, reason);
         _logger.LogInformation("file session on {Connection} ended: {Reason}", session.Connection, reason);
     }

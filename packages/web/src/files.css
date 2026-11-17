@@ -52,3 +52,47 @@
 .files-recent:empty {
   display: none;
 }
+
+.files-upload-tools {
+  margin-bottom: 0.6rem;
+}
+
+.files-drop {
+  border: 2px dashed transparent;
+  border-radius: 6px;
+}
+
+.files-drop[data-over] {
+  border-color: var(--page-border);
+  background: var(--page-panel);
+}
+
+.files-uploads {
+  margin-top: 0.8rem;
+}
+
+.files-uploads:empty {
+  display: none;
+}
+
+.files-upload-list {
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.files-upload {
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem 0.4rem;
+}
+
+.files-upload-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.files-upload[data-state='failed'] .printer-file-detail,
+.files-upload[data-state='exists'] .printer-file-detail {
+  color: var(--status-error);
+}

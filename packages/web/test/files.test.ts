@@ -7,6 +7,9 @@ import {
   pathProblem,
   remember,
   sizeText,
+  uploadItems,
+  uploadSummary,
+  type UploadItem,
 } from '../src/files.ts';
 
 describe('Files panel', () => {
@@ -70,5 +73,38 @@ describe('Files panel', () => {
     let recent: string[] = [];
     for (const path of ['/a', '/b', '/a', '/c', '/d', '/e', '/f']) recent = remember(recent, path);
     expect(recent).toEqual(['/f', '/e', '/d', '/c', '/a']);
+  });
+
+  it('puts uploads at their relative paths in the folder', () => {
+    const file = new File(['x'], 'a.txt');
+    const items = uploadItems('/home/me', [
+      { file, relative: 'a.txt' },
+      { file, relative: 'docs/sub/b.txt' },
+      { file: null, relative: 'docs/empty' },
+    ]);
+    expect(items.map((i) => i.path)).toEqual([
+      '/home/me/a.txt',
+      '/home/me/docs/sub/b.txt',
+      '/home/me/docs/empty',
+    ]);
+    expect(items.every((i) => i.state === 'waiting')).toBe(true);
+    expect(uploadItems('/', [{ file, relative: '/x.txt' }])[0]?.path).toBe('/x.txt');
+  });
+
+  it('sums up an upload', () => {
+    const item = (state: UploadItem['state']): UploadItem => ({
+      file: null,
+      path: '/a',
+      state,
+      note: '',
+    });
+    expect(uploadSummary([item('done'), item('done')])).toBe('Uploaded 2 files.');
+    expect(uploadSummary([item('done'), item('exists'), item('failed')])).toBe(
+      'Uploaded 1 file. 1 file already there, not replaced. 1 file failed.',
+    );
+    expect(uploadSummary([item('done'), item('stopped'), item('stopped')])).toBe(
+      'Uploaded 1 file. Stopped.',
+    );
+    expect(uploadSummary([])).toBe('Nothing to upload.');
   });
 });

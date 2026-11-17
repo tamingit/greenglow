@@ -44,9 +44,21 @@ public sealed class FileServerClient : IAsyncDisposable
     /// <summary>Longer paths are refused before anything is sent.</summary>
     public const int MaxPathLength = 4096;
 
-    private const ushort ExchangeRequest = 22, OpenRequest = 2, ReadRequest = 3, CloseRequest = 9, ListRequest = 10;
+    private const ushort ExchangeRequest = 22, OpenRequest = 2, ReadRequest = 3, WriteRequest = 4, CloseRequest = 9, ListRequest = 10,
+        DeleteFileRequest = 12, CreateFolderRequest = 13, DeleteFolderRequest = 14;
     private const ushort ReturnCodeReply = 0x8001, OpenReply = 0x8002, ReadReply = 0x8003, CloseReply = 0x8004, ListReply = 0x8005,
-        ExchangeReply = 0x8009;
+        ExchangeReply = 0x8009, WriteReply = 0x800B;
+
+    /// <summary>The return code for a name that is already there (a file or folder of that name).</summary>
+    public const int AlreadyThere = 4;
+
+    /// <summary>The return code for a folder (or a folder on the way) that isn't there.</summary>
+    public const int NoSuchFolder = 3;
+
+    private const ushort AccessWrite = 2;
+
+    /// <summary>Open options for writing: create or replace what is there; create, but refuse when something is.</summary>
+    private const ushort CreateOrReplace = 2, CreateNew = 4;
 
     /// <summary>The return code that ends a listing: no more entries.</summary>
     public const int NoMoreFiles = 18;
@@ -179,6 +191,110 @@ public sealed class FileServerClient : IAsyncDisposable
         return new FolderEntry(name, folder, size, DateTimeOffset.FromUnixTimeSeconds(seconds), type, attributes);
     }
 
+    /// <summary>
+    /// Opens a file for writing, creating it, tagged with `fileCcsid`. With `replace`, a file of
+    /// that name is emptied first; without, it is refused (FileServerException 4). A folder on the
+    /// way that isn't there is refused (3).
+    /// </summary>
+    public async Task<int> OpenForWriteAsync(string path, bool replace, ushort fileCcsid, CancellationToken cancel)
+    {
+        await _host.SendAsync(Open(_host.NextCorrelation(), PathBytes(path), (ushort)Ccsid, DatastreamLevel, AccessWrite,
+            replace ? CreateOrReplace : CreateNew, fileCcsid), cancel);
+        var reply = await ReceiveAsync(_host, OpenReply, 26, cancel);
+        return BinaryPrimitives.ReadInt32BigEndian(reply.AsSpan(22));
+    }
+
+    /// <summary>Writes bytes at `offset` (reply 800B: the return code at 22, the length not written at 28).</summary>
+    public async Task WriteAsync(int handle, long offset, ReadOnlyMemory<byte> data, CancellationToken cancel)
+    {
+        await _host.SendAsync(Write(_host.NextCorrelation(), handle, offset, data.Span, DatastreamLevel), cancel);
+        var reply = await ReceiveAsync(_host, WriteReply, 24, cancel);
+        var code = BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(22));
+        if (code != 0) throw new FileServerException(code, Describe(code));
+        if (reply.Length >= 32 && BinaryPrimitives.ReadInt32BigEndian(reply.AsSpan(28)) is > 0 and var left)
+            throw new FileServerException(11, $"The IBM i wrote all but {left} bytes. It may be out of space.");
+    }
+
+    /// <summary>
+    /// Copies `source` into a new file (or, with `replace`, over one that is there), in blocks,
+    /// closing it on the IBM i whatever happens. Returns the bytes written.
+    /// </summary>
+    public async Task<long> UploadAsync(string path, Stream source, bool replace, ushort fileCcsid, CancellationToken cancel)
+    {
+        var handle = await OpenForWriteAsync(path, replace, fileCcsid, cancel);
+        var buffer = new byte[ReadBlock];
+        long written = 0;
+        try
+        {
+            while (true)
+            {
+                var read = await source.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, cancel);
+                if (read == 0) break;
+                await WriteAsync(handle, written, buffer.AsMemory(0, read), cancel);
+                written += read;
+                if (read < buffer.Length) break;
+            }
+        }
+        catch
+        {
+            using var quick = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try { await CloseAsync(handle, quick.Token); } catch { /* the connection is gone */ }
+            throw;
+        }
+        await CloseAsync(handle, cancel);
+        return written;
+    }
+
+    /// <summary>Creates a folder. Throws FileServerException 4 when something of that name is there, 3 when its folder isn't.</summary>
+    public async Task CreateFolderAsync(string path, CancellationToken cancel)
+    {
+        await _host.SendAsync(CreateFolder(_host.NextCorrelation(), PathBytes(path), (ushort)Ccsid), cancel);
+        await ReturnCodeAsync(cancel);
+    }
+
+    /// <summary>Makes sure a folder is there, creating it and any folders on the way that aren't.</summary>
+    public async Task EnsureFolderAsync(string path, CancellationToken cancel)
+    {
+        path = path.TrimEnd('/');
+        if (path.Length == 0) return;
+        try
+        {
+            await CreateFolderAsync(path, cancel);
+        }
+        catch (FileServerException e) when (e.Code == AlreadyThere)
+        {
+        }
+        catch (FileServerException e) when (e.Code == NoSuchFolder)
+        {
+            await EnsureFolderAsync(path[..path.LastIndexOf('/')], cancel);
+            await CreateFolderAsync(path, cancel);
+        }
+    }
+
+    public async Task DeleteFileAsync(string path, CancellationToken cancel)
+    {
+        await _host.SendAsync(DeleteFile(_host.NextCorrelation(), PathBytes(path), (ushort)Ccsid), cancel);
+        await ReturnCodeAsync(cancel);
+    }
+
+    /// <summary>Deletes an empty folder (FileServerException 9 when it isn't empty).</summary>
+    public async Task DeleteFolderAsync(string path, CancellationToken cancel)
+    {
+        await _host.SendAsync(DeleteFolder(_host.NextCorrelation(), PathBytes(path), (ushort)Ccsid), cancel);
+        await ReturnCodeAsync(cancel);
+    }
+
+    /// <summary>A request answered by a bare return code (8001): 0 is done, anything else is thrown.</summary>
+    private async Task ReturnCodeAsync(CancellationToken cancel)
+    {
+        var reply = await _host.ReceiveAsync(cancel);
+        if (reply.Length < 24 || BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(6)) != ServerId
+            || BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(18)) != ReturnCodeReply)
+            throw Malformed("reply");
+        var code = BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(22));
+        if (code != 0) throw new FileServerException(code, Describe(code));
+    }
+
     public async Task CloseAsync(int handle, CancellationToken cancel)
     {
         await _host.SendAsync(Close(_host.NextCorrelation(), handle), cancel);
@@ -236,7 +352,8 @@ public sealed class FileServerClient : IAsyncDisposable
         1 => "The file is in use.",
         2 => "There is no such file.",
         3 => "There is no such folder.",
-        4 => "That is a folder, not a file.",
+        4 => "Something of that name is already there.",
+        9 => "The folder isn't empty.",
         5 or 13 => "You aren't authorised to that file or folder on the IBM i.",
         7 => "That isn't a valid file name.",
         11 or 12 => "The IBM i hasn't the resources for that right now.",
@@ -290,14 +407,20 @@ public sealed class FileServerClient : IAsyncDisposable
         return frame;
     }
 
-    /// <summary>Open (2): template 44 (36 below level 16); the name's length at 64 (56), code point 2, the name at 70 (62).</summary>
-    public static byte[] Open(int correlation, byte[] path, ushort ccsid, int level, ushort access, ushort option)
+    /// <summary>
+    /// Open (2): template 44 (36 below level 16); the name's CCSID at 22, the file data's CCSID at
+    /// 28 (for a file it creates), access at 30 (1 read, 2 write), share at 32 (0: anyone), the open
+    /// option at 36 (1 open or create, 2 create or replace, 4 create but fail if there, 8 open but
+    /// fail if not); the name's length at 64 (56), code point 2, the name at 70 (62).
+    /// </summary>
+    public static byte[] Open(int correlation, byte[] path, ushort ccsid, int level, ushort access, ushort option, ushort fileCcsid = 0)
     {
         var template = (ushort)(level >= 16 ? 44 : 36);
         var frame = NewFrame(20 + template + 6 + path.Length, correlation, template, OpenRequest);
         var span = frame.AsSpan();
         BinaryPrimitives.WriteUInt16BigEndian(span[22..], ccsid);
         BinaryPrimitives.WriteInt32BigEndian(span[24..], 1);
+        BinaryPrimitives.WriteUInt16BigEndian(span[28..], fileCcsid);
         BinaryPrimitives.WriteUInt16BigEndian(span[30..], access);
         BinaryPrimitives.WriteUInt16BigEndian(span[36..], option);
         BinaryPrimitives.WriteUInt16BigEndian(span[46..], 1);
@@ -337,6 +460,58 @@ public sealed class FileServerClient : IAsyncDisposable
         BinaryPrimitives.WriteInt32BigEndian(span[40..], pattern.Length + 6);
         BinaryPrimitives.WriteUInt16BigEndian(span[44..], 2);
         pattern.CopyTo(frame, 46);
+        return frame;
+    }
+
+    /// <summary>
+    /// Write (4): template 34 (18 below level 16); handle at 22, offset 64-bit at 46 (32-bit at
+    /// 30), data flags 2 at 34, the data's CCSID at 36 (65535: bytes as they are); the data as
+    /// code point 0020 with its length at 54 (38), the bytes from 60 (44).
+    /// </summary>
+    public static byte[] Write(int correlation, int handle, long offset, ReadOnlySpan<byte> data, int level)
+    {
+        var template = (ushort)(level >= 16 ? 34 : 18);
+        var ll = 20 + template;
+        var frame = NewFrame(ll + 6 + data.Length, correlation, template, WriteRequest);
+        var span = frame.AsSpan();
+        BinaryPrimitives.WriteInt32BigEndian(span[22..], handle);
+        if (level >= 16) BinaryPrimitives.WriteInt64BigEndian(span[46..], offset);
+        else BinaryPrimitives.WriteInt32BigEndian(span[30..], checked((int)offset));
+        BinaryPrimitives.WriteUInt16BigEndian(span[34..], 2);
+        BinaryPrimitives.WriteUInt16BigEndian(span[36..], 0xFFFF);
+        BinaryPrimitives.WriteInt32BigEndian(span[ll..], data.Length + 6);
+        BinaryPrimitives.WriteUInt16BigEndian(span[(ll + 4)..], 0x0020);
+        data.CopyTo(span[(ll + 6)..]);
+        return frame;
+    }
+
+    /// <summary>Create folder (13) and delete file (12): template 8; CCSID at 22, 1 at 24, the name's length at 28, its code point (1 a folder, 2 a file) at 32, the name from 34.</summary>
+    public static byte[] ByName(ushort request, ushort codePoint, int correlation, byte[] path, ushort ccsid)
+    {
+        var frame = NewFrame(34 + path.Length, correlation, 8, request);
+        var span = frame.AsSpan();
+        BinaryPrimitives.WriteUInt16BigEndian(span[22..], ccsid);
+        BinaryPrimitives.WriteInt32BigEndian(span[24..], 1);
+        BinaryPrimitives.WriteInt32BigEndian(span[28..], path.Length + 6);
+        BinaryPrimitives.WriteUInt16BigEndian(span[32..], codePoint);
+        path.CopyTo(frame, 34);
+        return frame;
+    }
+
+    public static byte[] CreateFolder(int correlation, byte[] path, ushort ccsid) => ByName(CreateFolderRequest, 1, correlation, path, ccsid);
+
+    public static byte[] DeleteFile(int correlation, byte[] path, ushort ccsid) => ByName(DeleteFileRequest, 2, correlation, path, ccsid);
+
+    /// <summary>Delete folder (14): template 10; CCSID at 22, 1 at 24, flags 0 at 28, the name's length at 30, code point 1 at 34, the name from 36.</summary>
+    public static byte[] DeleteFolder(int correlation, byte[] path, ushort ccsid)
+    {
+        var frame = NewFrame(36 + path.Length, correlation, 10, DeleteFolderRequest);
+        var span = frame.AsSpan();
+        BinaryPrimitives.WriteUInt16BigEndian(span[22..], ccsid);
+        BinaryPrimitives.WriteInt32BigEndian(span[24..], 1);
+        BinaryPrimitives.WriteInt32BigEndian(span[30..], path.Length + 6);
+        BinaryPrimitives.WriteUInt16BigEndian(span[34..], 1);
+        path.CopyTo(frame, 36);
         return frame;
     }
 

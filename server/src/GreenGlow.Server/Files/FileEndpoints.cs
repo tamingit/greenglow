@@ -1,5 +1,6 @@
 using System.Net.Sockets;
 using GreenGlow.Server.Auth;
+using GreenGlow.Server.Configuration;
 using GreenGlow.Server.HostServers;
 using GreenGlow.Server.Logins;
 using GreenGlow.Server.People;
@@ -167,6 +168,143 @@ public static class FileEndpoints
             }
         });
 
+        // A file's bytes, as the request's body, to a path: the folders on the way are made when
+        // they aren't there; a file already there is refused unless replace is true.
+        files.MapPut("/upload", async (string connection, string? path, bool? replace, HttpContext context, Access access,
+            FileSessions sessions, FilesOptions options) =>
+        {
+            var user = CurrentUser.From(context.User)!;
+            if (await access.FindAsync(user, connection) is null) return NoSystem();
+            if (sessions.Find(user.Id, connection) is not { } session) return SignOnNeeded();
+            var target = FolderPath(path);
+            if (target == "/" || !target.StartsWith('/') || (path ?? "").TrimEnd().EndsWith('/'))
+                return Results.BadRequest(new { error = "path", message = "Give the path of the file to make, such as /home/USER/report.csv." });
+            try
+            {
+                FileServerClient.PathBytes(target);
+            }
+            catch (ArgumentException e)
+            {
+                return Results.BadRequest(new { error = "path", message = e.Message });
+            }
+            var limit = (long)Math.Max(1, options.MaxUploadMegabytes) * 1024 * 1024;
+            if (context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } size)
+                size.MaxRequestBodySize = limit;
+            if (context.Request.ContentLength > limit)
+                return Results.Json(new { error = "too-large", message = $"A file can be at most {options.MaxUploadMegabytes} MB." },
+                    statusCode: StatusCodes.Status413PayloadTooLarge);
+
+            using var use = await session.UseAsync(context.RequestAborted);
+            try
+            {
+                await session.Client.EnsureFolderAsync(target[..target.LastIndexOf('/')], CancellationToken.None);
+                var written = await session.Client.UploadAsync(target, new UploadSource(context.Request.Body), replace == true,
+                    (ushort)Math.Clamp(options.UploadCcsid, 1, 65535), CancellationToken.None);
+                session.Transferred();
+                return Results.Json(new { path = target, name = FileName(target), size = written });
+            }
+            catch (FileServerException e) when (e.Code == FileServerClient.AlreadyThere)
+            {
+                return Results.Conflict(new
+                {
+                    error = "exists",
+                    message = $"{FileName(target)} is already there. Choose Replace to write over it.",
+                });
+            }
+            catch (FileServerException e) when (e.Code >= 0)
+            {
+                return Refused(e);
+            }
+            catch (UploadSourceException e)
+            {
+                // The browser stopped sending part way (or sent too much): the file was closed with
+                // what had come, so it is deleted rather than left half there.
+                try
+                {
+                    await session.Client.DeleteFileAsync(target, CancellationToken.None);
+                }
+                catch (Exception left) when (left is FileServerException || IsLost(left))
+                {
+                }
+                return e.InnerException is BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge }
+                    ? Results.Json(new { error = "too-large", message = $"A file can be at most {options.MaxUploadMegabytes} MB." },
+                        statusCode: StatusCodes.Status413PayloadTooLarge)
+                    : Results.BadRequest(new { error = "incomplete", message = "The upload stopped before the whole file was sent." });
+            }
+            catch (Exception e) when (IsLost(e))
+            {
+                use.Dispose();
+                return await LostAsync(sessions, session, e);
+            }
+        });
+
+        // A folder, and the folders on the way to it, made when they aren't there.
+        files.MapPost("/folder", async (string connection, string? path, HttpContext context, Access access,
+            FileSessions sessions) =>
+        {
+            var user = CurrentUser.From(context.User)!;
+            if (await access.FindAsync(user, connection) is null) return NoSystem();
+            if (sessions.Find(user.Id, connection) is not { } session) return SignOnNeeded();
+            var folder = FolderPath(path);
+            if (folder == "/" || !folder.StartsWith('/'))
+                return Results.BadRequest(new { error = "path", message = "Give the path of the folder to make." });
+            try
+            {
+                FileServerClient.PathBytes(folder);
+            }
+            catch (ArgumentException e)
+            {
+                return Results.BadRequest(new { error = "path", message = e.Message });
+            }
+            using var use = await session.UseAsync(context.RequestAborted);
+            try
+            {
+                await session.Client.EnsureFolderAsync(folder, CancellationToken.None);
+                return Results.Json(new { path = folder });
+            }
+            catch (FileServerException e) when (e.Code >= 0)
+            {
+                return Refused(e);
+            }
+            catch (Exception e) when (IsLost(e))
+            {
+                use.Dispose();
+                return await LostAsync(sessions, session, e);
+            }
+        });
+
+        // One file, or one empty folder, deleted (folder=true for a folder): what the user's own
+        // profile may delete. The panel has no button for it yet; the live tests clean up with it.
+        files.MapDelete("/entry", async (string connection, string? path, bool? folder, HttpContext context, Access access,
+            FileSessions sessions) =>
+        {
+            var user = CurrentUser.From(context.User)!;
+            if (await access.FindAsync(user, connection) is null) return NoSystem();
+            if (sessions.Find(user.Id, connection) is not { } session) return SignOnNeeded();
+            var target = FolderPath(path);
+            if (target == "/" || !target.StartsWith('/')) return Results.BadRequest(new { error = "path", message = "Give the path of a file or an empty folder." });
+            using var use = await session.UseAsync(context.RequestAborted);
+            try
+            {
+                if (folder == true) await session.Client.DeleteFolderAsync(target, CancellationToken.None);
+                else await session.Client.DeleteFileAsync(target, CancellationToken.None);
+                return Results.NoContent();
+            }
+            catch (FileServerException e) when (e.Code == 9)
+            {
+                return Results.Conflict(new { error = "not-empty", message = e.Message });
+            }
+            catch (FileServerException e) when (e.Code >= 0)
+            {
+                return Refused(e);
+            }
+            catch (Exception e) when (IsLost(e))
+            {
+                use.Dispose();
+                return await LostAsync(sessions, session, e);
+            }
+        });
+
         // A file by its IFS path, as an attachment. It is opened first, so a refusal is an answer
         // of its own; then it streams, with the length the IBM i reported.
         files.MapGet("/download", async (string connection, string? path, HttpContext context, Access access,
@@ -203,7 +341,7 @@ public static class FileEndpoints
                 return await LostAsync(sessions, session, e);
             }
 
-            session.Downloading();
+            session.Transferred();
             var response = context.Response;
             response.Headers.CacheControl = "no-store";
             response.Headers.ContentDisposition = new ContentDispositionHeaderValue("attachment") { FileNameStar = FileName(path) }.ToString();
@@ -233,6 +371,40 @@ public static class FileEndpoints
         });
 
         return api;
+    }
+
+    /// <summary>A failure reading the browser's upload, told apart from the IBM i's connection failing.</summary>
+    private sealed class UploadSourceException(Exception inner) : Exception("reading the upload failed", inner);
+
+    /// <summary>The request body, read only forward, with its failures wrapped in UploadSourceException.</summary>
+    private sealed class UploadSource(Stream body) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancel = default)
+        {
+            try
+            {
+                return await body.ReadAsync(buffer, cancel);
+            }
+            catch (Exception e) when (e is IOException or BadHttpRequestException or OperationCanceledException or ObjectDisposedException)
+            {
+                throw new UploadSourceException(e);
+            }
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancel) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancel).AsTask();
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     /// <summary>The most entries a listing shows.</summary>
@@ -266,7 +438,7 @@ public static class FileEndpoints
     private static IResult Refused(FileServerException e) => e.Code switch
     {
         2 or 3 => Results.NotFound(new { error = "not-found", code = e.Code, message = e.Message }),
-        4 => Results.BadRequest(new { error = "folder", code = e.Code, message = e.Message }),
+        4 => Results.BadRequest(new { error = "folder", code = e.Code, message = "That is a folder, not a file." }),
         5 or 13 => Results.Json(new { error = "not-authorised", code = e.Code, message = e.Message }, statusCode: StatusCodes.Status403Forbidden),
         _ => Results.Json(new { error = "file-server", code = e.Code, message = e.Message }, statusCode: StatusCodes.Status502BadGateway),
     };
