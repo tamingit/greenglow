@@ -3,7 +3,9 @@ import {
   entryDetail,
   joinPath,
   listingText,
+  nameProblem,
   parentOf,
+  protectedPath,
   pathProblem,
   remember,
   sizeText,
@@ -106,5 +108,18 @@ describe('Files panel', () => {
       'Uploaded 1 file. Stopped.',
     );
     expect(uploadSummary([])).toBe('Nothing to upload.');
+  });
+
+  it('takes a name without a slash, . or ..', () => {
+    expect(nameProblem('reports')).toBeUndefined();
+    expect(nameProblem('')).toMatch(/Type a name/);
+    expect(nameProblem('a/b')).toMatch(/\//);
+    expect(nameProblem('..')).toMatch(/can’t be/);
+  });
+
+  it('leaves / and the folders directly in it alone', () => {
+    expect(protectedPath('/')).toBe(true);
+    expect(protectedPath('/QSYS.LIB')).toBe(true);
+    expect(protectedPath('/home/me')).toBe(false);
   });
 });

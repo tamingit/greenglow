@@ -63,6 +63,7 @@ public sealed class FileEndpointsTests
         Assert.Equal("signon-needed", await Error(upload));
         Assert.Equal("signon-needed", await Error(await client.PostAsync("/api/files/test/folder?path=/tmp/a", null)));
         Assert.Equal("signon-needed", await Error(await client.DeleteAsync("/api/files/test/entry?path=/tmp/a")));
+        Assert.Equal("signon-needed", await Error(await client.PostAsync("/api/files/test/rename?path=/tmp/a&name=b", null)));
         Assert.Equal(HttpStatusCode.NotFound,
             (await client.PutAsync("/api/files/nowhere/upload?path=/tmp/a.bin", new ByteArrayContent([1]))).StatusCode);
         // Without an allowed Origin, nothing is sent at all.
@@ -97,6 +98,15 @@ public sealed class FileEndpointsTests
     [InlineData("/../..", "/")]
     [InlineData("home/me", "home/me")]
     public void AFolderPathIsTidied(string path, string folder) => Assert.Equal(folder, FileEndpoints.FolderPath(path));
+
+    [Theory]
+    [InlineData("/", true)]
+    [InlineData("/QSYS.LIB", true)]
+    [InlineData("/home/", true)]
+    [InlineData("/home/me", false)]
+    [InlineData("/tmp/x/y", false)]
+    public void TheRootAndTheFoldersInItAreNeverDeletedOrRenamed(string path, bool kept) =>
+        Assert.Equal(kept, FileEndpoints.Protected(path));
 
     [Theory]
     [InlineData("/home/me/report.csv", "report.csv")]
@@ -165,13 +175,24 @@ public sealed class FileEndpointsTests
             $"/api/files/live/upload?path={Uri.EscapeDataString(root + "/in/a.txt")}&replace=true",
             new ByteArrayContent("x"u8.ToArray())))).GetProperty("size").GetInt64());
         await Json(await client.PostAsync($"/api/files/live/folder?path={Uri.EscapeDataString(root + "/empty")}", null));
+        var empty = await Json(await client.GetAsync($"/api/files/live/list?path={Uri.EscapeDataString(root + "/empty")}"));
+        Assert.Empty(empty.GetProperty("entries").EnumerateArray());
         var inRoot = (await Json(await client.GetAsync($"/api/files/live/list?path={Uri.EscapeDataString(root)}")))
             .GetProperty("entries").EnumerateArray().Select(e => e.GetProperty("name").GetString()).ToList();
         Assert.Equal(["empty", "in"], inRoot);
         Assert.Equal("not-empty", await Error(await client.DeleteAsync($"/api/files/live/entry?folder=true&path={Uri.EscapeDataString(root)}")));
-        foreach (var (made, isFolder) in new[] { (root + "/in/a.txt", false), (root + "/in", true), (root + "/empty", true), (root, true) })
-            Assert.Equal(HttpStatusCode.NoContent,
-                (await client.DeleteAsync($"/api/files/live/entry?folder={(isFolder ? "true" : "false")}&path={Uri.EscapeDataString(made)}")).StatusCode);
+        // New folder refuses a name in use; rename refuses one too, then renames.
+        Assert.Equal("exists", await Error(await client.PostAsync($"/api/files/live/folder?strict=true&path={Uri.EscapeDataString(root + "/empty")}", null)));
+        Assert.Equal("exists", await Error(await client.PostAsync($"/api/files/live/rename?path={Uri.EscapeDataString(root + "/empty")}&name=in", null)));
+        Assert.Equal(root + "/vacant", (await Json(await client.PostAsync(
+            $"/api/files/live/rename?path={Uri.EscapeDataString(root + "/empty")}&name=vacant", null))).GetProperty("path").GetString());
+        Assert.Equal("name", await Error(await client.PostAsync($"/api/files/live/rename?path={Uri.EscapeDataString(root + "/vacant")}&name=a/b", null)));
+        // Never / or a folder directly in it.
+        Assert.Equal("protected", await Error(await client.DeleteAsync("/api/files/live/entry?folder=true&recursive=true&path=/tmp")));
+        Assert.Equal("protected", await Error(await client.PostAsync("/api/files/live/rename?path=/tmp&name=elsewhere", null)));
+        // Everything in it, then it.
+        Assert.Equal(4, (await Json(await client.DeleteAsync(
+            $"/api/files/live/entry?folder=true&recursive=true&path={Uri.EscapeDataString(root)}"))).GetProperty("deleted").GetInt32());
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/files/live/list?path={Uri.EscapeDataString(root)}")).StatusCode);
 
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync("/api/files/live/signon")).StatusCode);

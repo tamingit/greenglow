@@ -74,6 +74,19 @@ export function uploadItems(
   }));
 }
 
+/** Why a name can't be used for a new folder or a rename, or undefined when it can. */
+export function nameProblem(name: string): string | undefined {
+  if (name === '') return 'Type a name.';
+  if (name.includes('/')) return 'A name can’t hold a /.';
+  if (name === '.' || name === '..') return 'A name can’t be . or ..';
+  return undefined;
+}
+
+/** Whether the panel leaves a path alone: / and the folders directly in it (QSYS.LIB, home ...). */
+export function protectedPath(path: string): boolean {
+  return path.split('/').filter(Boolean).length <= 1;
+}
+
 /** What the status line says when an upload ends. */
 export function uploadSummary(items: readonly UploadItem[]): string {
   const count = (state: UploadItem['state']) => items.filter((i) => i.state === state).length;
@@ -164,6 +177,8 @@ export class FilesPanel {
   readonly #recentBox = h('div', { class: 'files-recent' });
   /** The upload under way or last done, shown under the folder's entries. */
   readonly #uploadBox = h('div', { class: 'files-uploads' });
+  /** A question in the panel: a name to type, or whether to delete. */
+  readonly #askBox = h('div', { class: 'files-ask' });
   #uploads: UploadItem[] = [];
   #uploading = false;
   #stop: (() => void) | undefined;
@@ -400,6 +415,9 @@ export class FilesPanel {
     up.title = 'The folder this one is in (Backspace)';
     up.disabled = listing.path === '/';
     const refresh = button('Refresh', () => void this.#list(listing.path), 'printer-btn');
+    const newFolder = button('New folder…', () => this.#newFolder(listing.path), 'printer-btn');
+    newFolder.title = `Make a folder in ${listing.path}`;
+    this.#askBox.replaceChildren();
     const signOff = button('Sign off', () => void this.#signOff(), 'printer-btn');
 
     const rows = listing.entries.map((entry) => this.#row(listing.path, entry));
@@ -409,6 +427,14 @@ export class FilesPanel {
       ...rows,
     );
     list.addEventListener('keydown', (event) => {
+      const entry = listing.entries[rows.findIndex((row) => row.contains(document.activeElement))];
+      if ((event.key === 'F2' || event.key === 'Delete') && entry) {
+        if (protectedPath(joinPath(listing.path, entry.name))) return;
+        event.preventDefault();
+        if (event.key === 'F2') this.#rename(listing.path, entry);
+        else this.#delete(listing.path, entry);
+        return;
+      }
       if (event.key === 'Backspace' && listing.path !== '/') {
         event.preventDefault();
         void this.#list(parentOf(listing.path));
@@ -429,7 +455,8 @@ export class FilesPanel {
         signOff,
       ),
       where,
-      h('div', { class: 'files-tools' }, up, refresh),
+      h('div', { class: 'files-tools' }, up, refresh, newFolder),
+      this.#askBox,
       this.#uploadTools(listing.path),
       this.#dropZone(
         listing.path,
@@ -652,7 +679,170 @@ export class FilesPanel {
       if (entry.folder) void this.#list(path);
       else void this.#download(path);
     });
-    return h('li', {}, open);
+    if (protectedPath(path)) return h('li', { class: 'files-row' }, open);
+    const rename = button('Rename', () => this.#rename(folder, entry), 'printer-btn files-action');
+    rename.title = `Rename ${entry.name} (F2)`;
+    const remove = button('Delete', () => this.#delete(folder, entry), 'printer-btn files-action');
+    remove.title = `Delete ${entry.name} (Delete)`;
+    return h(
+      'li',
+      { class: 'files-row' },
+      open,
+      h('span', { class: 'files-actions' }, rename, remove),
+    );
+  }
+
+  /** Asks for a name in the panel; Escape or Cancel puts the question away. */
+  #askName(
+    label: string,
+    value: string,
+    submit: string,
+    act: (name: string) => Promise<void>,
+  ): void {
+    const box = h('input', {
+      class: 'printer-input',
+      id: 'files-name',
+      type: 'text',
+      autocomplete: 'off',
+      spellcheck: 'false',
+    });
+    box.value = value;
+    const ok = h('button', { type: 'submit', class: 'printer-btn printer-primary', text: submit });
+    const cancel = button('Cancel', () => this.#putAway(), 'printer-btn');
+    const form = h(
+      'form',
+      { class: 'files-ask-form', 'aria-label': label },
+      h('label', { for: 'files-name', text: label }),
+      box,
+      h('div', { class: 'files-tools' }, ok, cancel),
+    );
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const name = box.value.trim();
+      const problem = nameProblem(name);
+      if (problem) {
+        this.#say(problem, true);
+        box.focus();
+        return;
+      }
+      ok.disabled = true;
+      void act(name).finally(() => (ok.disabled = false));
+    });
+    this.#show(form);
+    box.focus();
+    box.select();
+  }
+
+  /** Asks whether to go ahead, saying what will happen. */
+  #confirm(text: string, go: string, act: () => Promise<void>): void {
+    const yes = button(
+      go,
+      () => {
+        yes.disabled = true;
+        void act().finally(() => (yes.disabled = false));
+      },
+      'printer-btn files-danger',
+    );
+    const no = button('Cancel', () => this.#putAway(), 'printer-btn');
+    this.#show(
+      h(
+        'div',
+        { class: 'files-ask-form', role: 'alertdialog', 'aria-label': text },
+        h('p', { class: 'files-ask-text', text }),
+        h('div', { class: 'files-tools' }, yes, no),
+      ),
+    );
+    no.focus();
+  }
+
+  #show(question: HTMLElement): void {
+    question.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      // Puts the question away, not the panel.
+      event.preventDefault();
+      event.stopPropagation();
+      this.#putAway();
+    });
+    this.#askBox.replaceChildren(question);
+  }
+
+  #putAway(): void {
+    this.#askBox.replaceChildren();
+    this.#root.querySelector<HTMLElement>('.files-entry, #files-path')?.focus();
+  }
+
+  #newFolder(folder: string): void {
+    this.#askName(`Name of the new folder in ${folder}`, '', 'Make', async (name) => {
+      try {
+        await api(
+          'POST',
+          this.#path(`/folder?strict=true&path=${encodeURIComponent(joinPath(folder, name))}`),
+        );
+      } catch (error) {
+        this.#fail(error);
+        return;
+      }
+      await this.#list(folder, this.#generation, true);
+      this.#say(`Made ${name}/.`);
+    });
+  }
+
+  #rename(folder: string, entry: FolderEntry): void {
+    const shown = entry.folder ? `${entry.name}/` : entry.name;
+    this.#askName(`New name for ${shown}`, entry.name, 'Rename', async (name) => {
+      if (name === entry.name) {
+        this.#putAway();
+        return;
+      }
+      try {
+        await api(
+          'POST',
+          this.#path(
+            `/rename?path=${encodeURIComponent(joinPath(folder, entry.name))}&name=${encodeURIComponent(name)}`,
+          ),
+        );
+      } catch (error) {
+        this.#fail(error);
+        return;
+      }
+      await this.#list(folder, this.#generation, true);
+      this.#say(`Renamed ${shown} to ${name}${entry.folder ? '/' : ''}.`);
+    });
+  }
+
+  /** Deletes a file, or an empty folder; a folder with things in it is asked about again. */
+  #delete(folder: string, entry: FolderEntry): void {
+    const path = joinPath(folder, entry.name);
+    const shown = entry.folder ? `${entry.name}/` : entry.name;
+    const remove = async (recursive: boolean): Promise<void> => {
+      let deleted: number;
+      try {
+        ({ deleted } = await api<{ deleted: number }>(
+          'DELETE',
+          this.#path(
+            `/entry?folder=${entry.folder}&recursive=${recursive}&path=${encodeURIComponent(path)}`,
+          ),
+        ));
+      } catch (error) {
+        if (!recursive && error instanceof ApiError && error.code === 'not-empty') {
+          this.#confirm(
+            `${shown} has files or folders in it. Delete it and everything in it? This can't be undone.`,
+            'Delete everything',
+            () => remove(true),
+          );
+          return;
+        }
+        this.#fail(error);
+        return;
+      }
+      await this.#list(folder, this.#generation, true);
+      this.#say(
+        recursive
+          ? `Deleted ${shown} and everything in it (${deleted} ${deleted === 1 ? 'entry' : 'entries'}).`
+          : `Deleted ${shown}.`,
+      );
+    };
+    this.#confirm(`Delete ${shown}? This can't be undone.`, 'Delete', () => remove(false));
   }
 
   /** The path box: a file downloads, a folder opens. */

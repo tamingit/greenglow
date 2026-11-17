@@ -201,7 +201,7 @@ test.describe('live test system', () => {
     await expect(page.locator('#terminal .offline')).toBeVisible({ timeout: 30_000 });
   });
 
-  test('the Files panel uploads a folder and files into /tmp, refuses what is there, and replaces it', async ({
+  test('the Files panel uploads, refuses what is there and replaces it, makes, renames and deletes, in /tmp', async ({
     page,
   }) => {
     test.setTimeout(150_000);
@@ -256,19 +256,37 @@ test.describe('live test system', () => {
     for (const file of ['a.txt', 'c.txt', 'd.txt', 'sub/'])
       await expect(inside.getByRole('button', { name: new RegExp(`^${file}`) })).toBeVisible();
 
-    // Cleans up what it made, through the API, as the same user.
-    const origin = new URL(page.url()).origin;
-    const remove = async (path: string, folder = false) => {
-      const response = await page.request.delete(
-        `/api/files/live/entry?folder=${folder}&path=${encodeURIComponent(path)}`,
-        { headers: { origin } },
-      );
-      expect(response.status()).toBe(204);
-    };
-    const root = `/tmp/${name}`;
-    for (const file of ['a.txt', 'c.txt', 'd.txt', 'sub/b.txt']) await remove(`${root}/${file}`);
-    await remove(`${root}/sub`, true);
-    await remove(root, true);
+    // New folder, Rename (F2) and Delete, then the whole folder and everything in it.
+    await panel.getByRole('button', { name: 'New folder…' }).click();
+    await panel.getByLabel(`Name of the new folder in /tmp/${name}`).fill('made');
+    await panel.getByRole('button', { name: 'Make' }).click();
+    await expect(panel.getByRole('status')).toHaveText('Made made/.');
+    await expect(inside.getByRole('button', { name: /^made\// })).toBeVisible();
+
+    await inside.getByRole('button', { name: /^c\.txt/ }).focus();
+    await page.keyboard.press('F2');
+    await panel.getByLabel('New name for c.txt').fill('renamed.txt');
+    await page.keyboard.press('Enter');
+    await expect(panel.getByRole('status')).toHaveText('Renamed c.txt to renamed.txt.');
+    await expect(inside.getByRole('button', { name: /^renamed\.txt/ })).toBeVisible();
+
+    await panel.getByRole('button', { name: 'Delete d.txt (Delete)' }).click();
+    await panel
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click();
+    await expect(panel.getByRole('status')).toHaveText('Deleted d.txt.');
+
+    await panel.getByRole('button', { name: '↑ Up' }).click();
+    await expect(tmp).toBeVisible();
+    await panel.getByRole('button', { name: `Delete ${name} (Delete)` }).click();
+    await panel
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click();
+    await panel.getByRole('alertdialog').getByRole('button', { name: 'Delete everything' }).click();
+    await expect(panel.getByRole('status')).toContainText(`Deleted ${name}/ and everything in it`);
+    await expect(tmp.getByRole('button', { name: new RegExp(`^${name}/`) })).toHaveCount(0);
 
     await panel.getByRole('button', { name: 'Sign off' }).click();
     await expect(panel.getByLabel('IBM i user')).toBeVisible();
