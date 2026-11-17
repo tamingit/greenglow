@@ -3,12 +3,14 @@ import {
   entryDetail,
   joinPath,
   listingText,
+  moreText,
   nameProblem,
   parentOf,
   protectedPath,
   pathProblem,
   remember,
   sizeText,
+  sortEntries,
   uploadItems,
   uploadSummary,
   type UploadItem,
@@ -121,5 +123,18 @@ describe('Files panel', () => {
     expect(protectedPath('/')).toBe(true);
     expect(protectedPath('/QSYS.LIB')).toBe(true);
     expect(protectedPath('/home/me')).toBe(false);
+  });
+
+  it('offers the next page, and merges it folders first', () => {
+    expect(moreText(2000, 2000)).toBe('Only 2000 shown. Click here to fetch next 2000 items.');
+    const entry = (name: string, folder: boolean) => ({ name, folder, size: null, modified: '' });
+    expect(
+      sortEntries([
+        entry('b.txt', false),
+        entry('Zed', true),
+        entry('a.txt', false),
+        entry('alpha', true),
+      ]).map((e) => e.name),
+    ).toEqual(['alpha', 'Zed', 'a.txt', 'b.txt']);
   });
 });

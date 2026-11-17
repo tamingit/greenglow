@@ -92,6 +92,9 @@ public sealed class FilesOptions
     /// </summary>
     public int UploadCcsid { get; set; } = 1208;
 
+    /// <summary>How many entries of a folder the panel shows at a time (the rest a page at a time).</summary>
+    public int PageSize { get; set; } = 2000;
+
     /// <summary>The largest file one upload may send, in megabytes.</summary>
     public int MaxUploadMegabytes { get; set; } = 2048;
 }

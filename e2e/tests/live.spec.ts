@@ -168,6 +168,22 @@ test.describe('live test system', () => {
     await expect(bin).toBeVisible();
     await expect(where).toHaveValue('/QOpenSys/usr/bin');
 
+    // The e2e server shows 100 at a time: the last row fetches the next 100.
+    const more = bin.getByRole('button', {
+      name: 'Only 100 shown. Click here to fetch next 100 items.',
+    });
+    await expect(more).toBeVisible();
+    await more.click();
+    await expect(
+      bin.getByRole('button', { name: /^Only 200 shown\.|^ls\b/ }).first(),
+    ).toBeVisible();
+    // Fetch until ls, which comes past the first page, is there.
+    for (let i = 0; i < 10 && !(await bin.getByRole('button', { name: /^ls\b/ }).count()); i++) {
+      const next = bin.getByRole('button', { name: /^Only \d+ shown\./ });
+      if (!(await next.count())) break;
+      await next.click();
+    }
+
     // A PASE program every IBM i with PASE has: a click downloads it with its own name.
     const downloading = page.waitForEvent('download');
     await bin.getByRole('button', { name: /^ls\b/ }).first().click();

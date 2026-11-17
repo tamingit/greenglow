@@ -71,6 +71,20 @@ public sealed class FileServerLiveTests
         var ten = await client.ListAsync("/QOpenSys/usr/bin", 10, cancel.Token);
         Assert.Equal(10, ten.Count);
 
+        // A page at a time, each going on from the last entry of the one before: every entry once.
+        var paged = new List<string>();
+        ListRestart? after = null;
+        while (true)
+        {
+            var page = await client.ListAsync("/QOpenSys/usr/bin", 100, after, cancel.Token);
+            paged.AddRange(page.Select(e => e.Name));
+            if (page.Count < 100) break;
+            after = new ListRestart(page[^1].RestartId, page[^1].Name);
+        }
+        Console.WriteLine($"paged {paged.Count} entries, {bin.Count} unpaged; restart ID of the first: {Convert.ToHexString(ten[0].RestartId)}");
+        Assert.Equal(paged.Count, paged.Distinct().Count());
+        Assert.Equal(bin.Select(e => e.Name).Order(StringComparer.Ordinal), paged.Order(StringComparer.Ordinal));
+
         var missing = await Assert.ThrowsAsync<FileServerException>(() => client.ListAsync("/greenglow-no-such-folder", 0, cancel.Token));
         Assert.Equal(3, missing.Code);
 

@@ -142,3 +142,8 @@
   border-color: var(--status-error);
   color: var(--status-error);
 }
+
+.files-more {
+  font-style: italic;
+  text-align: center;
+}

@@ -103,6 +103,23 @@ public sealed class FileServerTests
     }
 
     [Theory]
+    [InlineData(false, 14)]
+    [InlineData(true, 7)]
+    public void ListGoesOnFromARestartIdOrName(bool byName, ushort codePoint)
+    {
+        var pattern = FileServerClient.PathBytes("/home/me/*");
+        byte[] restart = byName ? FileServerClient.PathBytes("/zz")[2..] : [0, 0, 1, 2];
+        var frame = FileServerClient.List(6, pattern, 1200, 100, restart, byName);
+        var at = 46 + pattern.Length;
+        Assert.Equal(at + 6 + restart.Length, frame.Length);
+        Assert.Equal(at + 6 + restart.Length, Int(frame, 0));
+        Assert.Equal(pattern, frame[46..at]);
+        Assert.Equal(restart.Length + 6, Int(frame, at));
+        Assert.Equal(codePoint, Short(frame, at + 4));
+        Assert.Equal(restart, frame[(at + 6)..]);
+    }
+
+    [Theory]
     [InlineData(2, 0x10, "docs", true, 8192)]
     [InlineData(1, 0x20, "report.csv", false, 0x1_2345_6789)]
     [InlineData(3, 0x10, "a-link", false, 74)]
@@ -121,6 +138,7 @@ public sealed class FileServerTests
         BinaryPrimitives.WriteInt32BigEndian(s[50..], attributes);
         BinaryPrimitives.WriteUInt16BigEndian(s[54..], (ushort)type);
         BinaryPrimitives.WriteInt64BigEndian(s[81..], size);
+        s[77..81].Fill(0x5A);
         BinaryPrimitives.WriteInt32BigEndian(s[113..], 6 + nameBytes.Length);
         BinaryPrimitives.WriteUInt16BigEndian(s[117..], 2);
         nameBytes.CopyTo(reply, 119);
@@ -128,6 +146,7 @@ public sealed class FileServerTests
         var entry = FileServerClient.Entry(reply, 24)!;
         Assert.Equal((name, folder, size, type), (entry.Name, entry.Folder, entry.Size, entry.ObjectType));
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1_700_000_000), entry.Modified);
+        Assert.Equal([0x5A, 0x5A, 0x5A, 0x5A], entry.RestartId);
         Assert.Null(FileServerClient.Entry(reply[..100], 24));
     }
 

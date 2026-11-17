@@ -49,6 +49,24 @@ interface Listing {
   path: string;
   truncated: boolean;
   entries: FolderEntry[];
+  /** How many entries a page has. */
+  pageSize?: number;
+  /** Where the next page starts, when there is more. */
+  next?: { id: string; name: string } | null;
+}
+
+/** Folders first, then by name whatever its case, as the server sorts each page. */
+export function sortEntries(entries: readonly FolderEntry[]): FolderEntry[] {
+  return [...entries].sort(
+    (a, b) =>
+      Number(b.folder) - Number(a.folder) ||
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+  );
+}
+
+/** The last row of a folder with more entries than shown. */
+export function moreText(shown: number, pageSize: number): string {
+  return `Only ${shown} shown. Click here to fetch next ${pageSize} items.`;
 }
 
 /** One file (or empty folder) to upload, and how it went. */
@@ -389,6 +407,35 @@ export class FilesPanel {
     return true;
   }
 
+  /** Fetches the next page of a folder and shows it with what was shown. */
+  async #more(listing: Listing): Promise<void> {
+    if (!listing.next) return;
+    const generation = this.#generation;
+    this.#say('Fetching more…');
+    let page: Listing;
+    try {
+      page = await api<Listing>(
+        'GET',
+        this.#path(
+          `/list?path=${encodeURIComponent(listing.path)}&afterId=${encodeURIComponent(listing.next.id)}&afterName=${encodeURIComponent(listing.next.name)}`,
+        ),
+      );
+    } catch (error) {
+      if (generation === this.#generation) this.#fail(error);
+      return;
+    }
+    if (generation !== this.#generation || this.#folder !== listing.path) return;
+    const merged: Listing = {
+      ...page,
+      path: listing.path,
+      entries: sortEntries([...listing.entries, ...page.entries]),
+    };
+    this.#browser(merged);
+    this.#say(listingText(merged));
+    const rows = this.#root.querySelectorAll<HTMLElement>('.files-entries .files-entry');
+    (this.#root.querySelector<HTMLElement>('.files-more') ?? rows[rows.length - 1])?.focus();
+  }
+
   /** The signed-on view: where we are, the folder's entries, and this panel's recent downloads. */
   #browser(listing: Listing): void {
     const pathBox = h('input', {
@@ -421,6 +468,15 @@ export class FilesPanel {
     const signOff = button('Sign off', () => void this.#signOff(), 'printer-btn');
 
     const rows = listing.entries.map((entry) => this.#row(listing.path, entry));
+    if (listing.next) {
+      const more = h('button', {
+        type: 'button',
+        class: 'printer-file files-entry files-more',
+        text: moreText(listing.entries.length, listing.pageSize ?? listing.entries.length),
+      });
+      more.addEventListener('click', () => void this.#more(listing));
+      rows.push(h('li', {}, more));
+    }
     const list = h(
       'ul',
       { class: 'printer-files files-entries', 'aria-label': `Contents of ${listing.path}` },

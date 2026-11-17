@@ -19,7 +19,14 @@ public sealed record OpenedFile(int Handle, long Size);
 /// One entry of a folder as the file server lists it. The size is the entry's own: for a
 /// symbolic link that is the link, not what it points to (an open follows the link).
 /// </summary>
-public sealed record FolderEntry(string Name, bool Folder, long Size, DateTimeOffset Modified, int ObjectType, int Attributes);
+public sealed record FolderEntry(string Name, bool Folder, long Size, DateTimeOffset Modified, int ObjectType, int Attributes)
+{
+    /// <summary>The server's restart ID for this entry (4 bytes at 77): a listing can go on after it.</summary>
+    public byte[] RestartId { get; init; } = [];
+}
+
+/// <summary>Where a listing goes on from: an entry's restart ID, or (when that is all zeros) its name.</summary>
+public sealed record ListRestart(byte[] Id, string Name);
 
 /// <summary>
 /// The IBM i file server (as-file, server ID E002, port 8473 or 9473 over TLS, found through the
@@ -150,10 +157,31 @@ public sealed class FileServerClient : IAsyncDisposable
     /// The entries of a folder (without . and ..), as many as `most`: the server stops there.
     /// Throws FileServerException 3 when there is no such folder.
     /// </summary>
-    public async Task<IReadOnlyList<FolderEntry>> ListAsync(string folder, int most, CancellationToken cancel)
+    public async Task<IReadOnlyList<FolderEntry>> ListAsync(string folder, int most, CancellationToken cancel) =>
+        await ListAsync(folder, most, after: null, cancel);
+
+    /// <summary>
+    /// The entries of a folder after `after` (an entry of an earlier page), in the server's order.
+    /// The restart point itself, should the server send it again, is left out.
+    /// </summary>
+    public async Task<IReadOnlyList<FolderEntry>> ListAsync(string folder, int most, ListRestart? after, CancellationToken cancel)
     {
         var pattern = folder.TrimEnd('/') + "/*";
-        await _host.SendAsync(List(_host.NextCorrelation(), PathBytes(pattern), (ushort)Ccsid, most), cancel);
+        byte[]? restart = null;
+        var byName = false;
+        if (after is not null)
+        {
+            byName = !(after.Id.Length == 4 && after.Id.Any(b => b != 0));
+            restart = byName ? Encoding.BigEndianUnicode.GetBytes(after.Name) : after.Id;
+        }
+        await _host.SendAsync(List(_host.NextCorrelation(), PathBytes(pattern), (ushort)Ccsid, most, restart, byName), cancel);
+        var entries = await ListRepliesAsync(cancel);
+        if (after is not null && entries.Count > 0 && entries[0].Name == after.Name) return entries.Skip(1).ToList();
+        return entries;
+    }
+
+    private async Task<List<FolderEntry>> ListRepliesAsync(CancellationToken cancel)
+    {
         var entries = new List<FolderEntry>();
         while (true)
         {
@@ -194,7 +222,10 @@ public sealed class FileServerClient : IAsyncDisposable
         var attributes = BinaryPrimitives.ReadInt32BigEndian(reply.AsSpan(50));
         var type = BinaryPrimitives.ReadUInt16BigEndian(reply.AsSpan(54));
         var folder = type is 1 or 2 && (attributes & FolderAttribute) != 0;
-        return new FolderEntry(name, folder, size, DateTimeOffset.FromUnixTimeSeconds(seconds), type, attributes);
+        return new FolderEntry(name, folder, size, DateTimeOffset.FromUnixTimeSeconds(seconds), type, attributes)
+        {
+            RestartId = reply.AsSpan(77, 4).ToArray(),
+        };
     }
 
     /// <summary>
@@ -486,9 +517,9 @@ public sealed class FileServerClient : IAsyncDisposable
     /// most entries at 34 (0xFFFF: no limit), attribute level 1 at 36, pattern matching 0 at 38;
     /// the pattern (a folder, then /*) as a length at 40, code point 2 at 44, the name from 46.
     /// </summary>
-    public static byte[] List(int correlation, byte[] pattern, ushort ccsid, int most)
+    public static byte[] List(int correlation, byte[] pattern, ushort ccsid, int most, byte[]? restart = null, bool restartByName = false)
     {
-        var frame = NewFrame(46 + pattern.Length, correlation, 20, ListRequest);
+        var frame = NewFrame(46 + pattern.Length + (restart is null ? 0 : 6 + restart.Length), correlation, 20, ListRequest);
         var span = frame.AsSpan();
         BinaryPrimitives.WriteUInt16BigEndian(span[26..], ccsid);
         BinaryPrimitives.WriteInt32BigEndian(span[28..], 1);
@@ -497,6 +528,14 @@ public sealed class FileServerClient : IAsyncDisposable
         BinaryPrimitives.WriteInt32BigEndian(span[40..], pattern.Length + 6);
         BinaryPrimitives.WriteUInt16BigEndian(span[44..], 2);
         pattern.CopyTo(frame, 46);
+        // Where to go on from: a restart name (code point 7) or restart ID (14), after the pattern.
+        if (restart is not null)
+        {
+            var at = 46 + pattern.Length;
+            BinaryPrimitives.WriteInt32BigEndian(span[at..], restart.Length + 6);
+            BinaryPrimitives.WriteUInt16BigEndian(span[(at + 4)..], restartByName ? (ushort)7 : (ushort)14);
+            restart.CopyTo(frame, at + 6);
+        }
         return frame;
     }
 
