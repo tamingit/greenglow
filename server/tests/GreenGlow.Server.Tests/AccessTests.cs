@@ -44,7 +44,7 @@ public sealed class AccessTests
     {
         ["Server:PublicUrl"] = T.Origin,
         ["Entra:InitialAdminUpn"] = Admin,
-        ["Dev:Groups"] = "Everyone=*,Developers=dev@example.com",
+        ["Dev:Groups"] = "Developers=dev@example.com",
         ["Seed:ConnectionsJson"] = Seed(),
     })
     {
@@ -98,11 +98,12 @@ public sealed class AccessTests
     }
 
     [Fact]
-    public async Task WhenTheDirectoryCantBeReachedGroupAccessFailsClosed()
+    public async Task WhenTheDirectoryCantBeReachedGroupAccessFailsClosedButEveryoneHolds()
     {
         using var factory = Factory(s => s.AddSingleton<IDirectory, UnreachableDirectory>());
-        Assert.Equal(["pat-only"], await TargetsAsync(factory, "pat@example.com"));
-        Assert.Empty(await TargetsAsync(factory, "someone@example.com"));
+        Assert.Equal(["everyone", "pat-only"], await TargetsAsync(factory, "pat@example.com"));
+        Assert.Equal(["everyone"], await TargetsAsync(factory, "someone@example.com"));
+        Assert.DoesNotContain("developers", await TargetsAsync(factory, "dev@example.com"));
         Assert.Equal(4, (await TargetsAsync(factory, Admin)).Count);
     }
 
