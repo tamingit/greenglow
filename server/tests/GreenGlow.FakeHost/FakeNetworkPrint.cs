@@ -167,14 +167,15 @@ public sealed class FakeNetworkPrint : IAsyncDisposable
         else if (user != User) rc = 0x00020001;
         else if (scheme != FakeCrypto.Scheme(level)) rc = 0x00010009;
         else rc = substitute.AsSpan().SequenceEqual(Expected(level, clientSeed, serverSeed)) ? 0 : 0x0003000B;
+        // Counted before the reply: a test reads the count as soon as the client has its answer.
+        if (rc == 0) Interlocked.Increment(ref _signOns);
+        else Interlocked.Increment(ref _refusals);
         await stream.WriteAsync(Frame(0xF002, [(byte)(rc >> 24), (byte)(rc >> 16), (byte)(rc >> 8), (byte)rc]), _stop.Token);
         if (rc != 0)
         {
-            Interlocked.Increment(ref _refusals);
             Log($"print #{id} sign-on refused ({rc:X8})");
             return false;
         }
-        Interlocked.Increment(ref _signOns);
         Log($"print #{id} signed on as {user}");
         return true;
     }
