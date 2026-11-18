@@ -58,6 +58,9 @@ const MAP: Record<string, KeyName> = {
   'S-Insert': 'Dup',
   'C-End': 'EraseEof',
   'A-End': 'EraseInput',
+  // Shift with the delete keys: Erase Input with Backspace, Erase EOF with Delete.
+  'S-Backspace': 'EraseInput',
+  'S-Delete': 'EraseEof',
   ...Object.fromEntries(F_KEYS.map((n) => [`F${n}`, `F${n}`])),
   ...Object.fromEntries(F_KEYS.map((n) => [`S-F${n}`, `F${n + 12}`])),
 };
