@@ -141,6 +141,9 @@ app.Services.GetRequiredService<SyncStore>().Applied += tables =>
 // Before seeding and before serving: take in what the other nodes have, sign-in keys included.
 await app.Services.GetRequiredService<SyncService>().JoinAsync();
 await signInConfig.ApplyAsync();
+// First-run setup from Setup__*, when nobody has set this server (or its cluster) up yet.
+await app.Services.GetRequiredService<SignInSetup>().ApplyEnvironmentAsync(
+    builder.Configuration.GetSection("Setup").Get<SetupOptions>() ?? new SetupOptions(), CancellationToken.None);
 await app.Services.GetRequiredService<UserStore>().PromoteInitialAdminAsync();
 await using (var db = await app.Services.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<GreenGlowDb>>().CreateDbContextAsync())
 {

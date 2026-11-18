@@ -19,6 +19,9 @@ public sealed record HostService(string Name, ushort ServerId, int Port, int Sec
     /// <summary>The sign-on server: checks a user and password, and changes a password.</summary>
     public static readonly HostService SignOn = new("as-signon", 0xE009, 8476, 9476);
 
+    /// <summary>The remote command server: calls a program (an API) as the signed-on user.</summary>
+    public static readonly HostService RemoteCommand = new("as-rmtcmd", 0xE008, 8475, 9475);
+
     /// <summary>The name the IBM i's port mapper knows it by: the TLS port has -s after it.</summary>
     public string MapName(bool secure) => secure ? Name + "-s" : Name;
 

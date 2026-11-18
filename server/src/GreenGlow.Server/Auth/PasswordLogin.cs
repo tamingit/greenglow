@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using GreenGlow.Server.Configuration;
 using GreenGlow.Server.Data;
 using GreenGlow.Server.HostServers;
 using GreenGlow.Server.Logins;
@@ -96,8 +97,9 @@ public static class PasswordLogin
     /// <summary>What the endpoints need, in one parameter.</summary>
     public sealed class Services(UserStore users, SignInThrottle throttle, ConnectionLogger log, TargetCatalog catalog,
         HostEndpoints endpoints, HostConnector connector, CredentialVault vault, IbmLogins logins, TimeProvider clock,
-        ILogger<Services> logger)
+        SettingsStore settings, ILogger<Services> logger)
     {
+        public SettingsStore Settings => settings;
         public UserStore Users => users;
         public SignInThrottle Throttle => throttle;
         public ConnectionLogger ConnectionLog => log;
@@ -221,10 +223,50 @@ public static class PasswordLogin
             return Refused(StatusCodes.Status401Unauthorized, "sign-in-failed", "An administrator has switched this account off.");
         }
         var userId = identity.FindFirst(Claims.ObjectId)!.Value;
+        await ApplyIbmAdminsAsync(context, services, target, userId, profile, password);
         // The password just checked signs the terminal and the printer panel on at that system.
         await services.Logins.SignedInAsync(userId, target, profile, password);
         await LogAsync(context, services, profile, userId, target.Name, "signed in", profile);
         return await SignedInAsync(context, identity, returnUrl);
+    }
+
+    /// <summary>
+    /// When the IBM i decides who is an administrator (IbmAdmins): asks it about this profile, with
+    /// the password just checked, and gives or takes the role. Administrators named on the admin
+    /// page keep it. A lookup that fails takes the IBM i's grant away (fails closed) but never
+    /// stops the sign-in.
+    /// </summary>
+    private static async Task ApplyIbmAdminsAsync(HttpContext context, Services services, Target target, string userId,
+        string profile, string password)
+    {
+        var rule = IbmAdmins.From(services.Settings);
+        if (!rule.IsSet) return;
+        bool admit;
+        string reason;
+        try
+        {
+            var endpoint = await services.Endpoints.ForAsync(target, HostService.RemoteCommand, context.RequestAborted);
+            var found = await RemoteCommand.CurrentUserAsync(services.Connector, endpoint, profile, password, context.RequestAborted);
+            admit = rule.Admits(found);
+            reason = admit ? "the IBM i makes it an administrator" : "the IBM i doesn't make it an administrator";
+        }
+        catch (SignOnException e)
+        {
+            if (e.Failure == SignOnFailure.Unreachable) services.Endpoints.Forget(target, HostService.RemoteCommand);
+            services.Log.LogWarning("reading {Profile}'s groups and special authorities on {Connection} failed: {Failure}: {Message}",
+                profile, target.Name, e.Failure, e.Message);
+            admit = false;
+            reason = "the IBM i couldn't say whether it is an administrator";
+        }
+        var changed = false;
+        await services.Users.UpdateAsync(userId, u =>
+        {
+            if (admit && !u.IsAdmin) (u.IsAdmin, u.AdminFromIbmI, changed) = (true, true, true);
+            else if (!admit && u.AdminFromIbmI) (u.IsAdmin, u.AdminFromIbmI, changed) = (false, false, true);
+        });
+        if (changed)
+            await LogAsync(context, services, profile, userId, target.Name,
+                admit ? $"administrator: {reason}" : $"no longer an administrator: {reason}", profile);
     }
 
     private const string WrongUserOrPassword =

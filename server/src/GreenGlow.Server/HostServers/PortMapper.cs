@@ -60,6 +60,11 @@ public sealed class HostServerOptions
     public int? FilePort { get; set; }
 
     public int? FileSecurePort { get; set; }
+
+    /// <summary>Another port for the remote command server, for tests. Production asks the port mapper when the connection uses it, else IBM's: 8475, and 9475 over TLS.</summary>
+    public int? RemoteCommandPort { get; set; }
+
+    public int? RemoteCommandSecurePort { get; set; }
 }
 
 /// <summary>
@@ -79,7 +84,8 @@ public sealed class HostEndpoints(HostServerOptions options, PrinterOptions prin
         var (plain, secure) = service == HostService.NetworkPrint
             ? (printer.Port, printer.SecurePort)
             : service == HostService.SignOn ? (options.SignOnPort, options.SignOnSecurePort)
-            : service == HostService.FileServer ? (options.FilePort, options.FileSecurePort) : (null, null);
+            : service == HostService.FileServer ? (options.FilePort, options.FileSecurePort)
+            : service == HostService.RemoteCommand ? (options.RemoteCommandPort, options.RemoteCommandSecurePort) : (null, null);
         return telnet with { Port = telnet.Secure ? secure ?? service.SecurePort : plain ?? service.Port };
     }
 

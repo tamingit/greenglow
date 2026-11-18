@@ -40,6 +40,13 @@ public sealed class AppUser
     public string DisplayName { get; set; } = "";
     public bool IsAdmin { get; set; }
 
+    /// <summary>
+    /// An IBM i user an administrator because the IBM i says so (IbmAdmins), checked at each
+    /// sign-in: it stops being one when the IBM i no longer says so. Administrators named on the
+    /// admin page don't have it, and keep the role.
+    /// </summary>
+    public bool AdminFromIbmI { get; set; }
+
     public UserSource Source { get; set; }
 
     /// <summary>For local accounts and the breakglass administrator: the password, hashed (see PasswordHash).</summary>

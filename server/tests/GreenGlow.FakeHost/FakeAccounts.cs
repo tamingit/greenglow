@@ -9,6 +9,9 @@ using GreenGlow.Engine;
 
 namespace GreenGlow.FakeHost;
 
+/// <summary>What the fake IBM i's QSYRUSRI says about a user profile.</summary>
+public sealed record FakeProfile(string? Group, string[] Supplemental, string[] Authorities);
+
 /// <summary>The fake IBM i's user profiles: a password each, and which are expired or disabled. Placeholder users only.</summary>
 public sealed class FakeAccounts
 {
@@ -19,6 +22,7 @@ public sealed class FakeAccounts
     private readonly Dictionary<string, string> _passwords = new() { [DefaultUser] = DefaultPassword };
     private readonly HashSet<string> _expired = [];
     private readonly HashSet<string> _disabled = [];
+    private readonly Dictionary<string, FakeProfile> _profiles = [];
 
     /// <summary>QPWDLVL: 0 or 1 for DES substitutes, 2 or 3 for SHA-1, 4 for SHA-512.</summary>
     public int PasswordLevel { get; set; } = 2;
@@ -43,6 +47,17 @@ public sealed class FakeAccounts
     public void Disable(string user)
     {
         lock (_gate) _disabled.Add(user.ToUpperInvariant());
+    }
+
+    /// <summary>A user's group profile, supplemental groups and special authorities (*SECADM...), as QSYRUSRI reports them.</summary>
+    public void SetProfile(string user, string? group = null, string[]? supplemental = null, string[]? authorities = null)
+    {
+        lock (_gate) _profiles[user.ToUpperInvariant()] = new FakeProfile(group, supplemental ?? [], authorities ?? []);
+    }
+
+    public FakeProfile ProfileOf(string user)
+    {
+        lock (_gate) return _profiles.GetValueOrDefault(user.ToUpperInvariant()) ?? new FakeProfile(null, [], []);
     }
 
     /// <summary>The return code for a sign-on with a password substitute (sequence 1): 0 when it is right.</summary>
