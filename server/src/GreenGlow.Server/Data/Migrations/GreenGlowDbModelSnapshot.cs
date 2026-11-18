@@ -130,6 +130,9 @@ namespace GreenGlow.Server.Data.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("AdminFromIbmI")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("Disabled")
                         .HasColumnType("INTEGER");
 
