@@ -24,7 +24,67 @@ public sealed record LocalChoice(string? User, string? Name, string? Password);
 /// one to add — and an IBM i user and password on it, checked there and then: it proves the
 /// system can be used to sign in, and that user becomes an administrator.
 /// </summary>
-public sealed record IbmChoice(string? Connection, ConnectionEndpoints.ConnectionRequest? NewConnection, string? User, string? Password);
+public sealed record IbmChoice(string? Connection, ConnectionEndpoints.ConnectionRequest? NewConnection, string? User, string? Password,
+    string? AdminGroups = null, string? AdminAuthorities = null);
+
+/// <summary>
+/// First-run setup from the environment (Setup__*), for a server whose database isn't set up
+/// yet: the same choices as the setup page. Applied once, at the first start; after that the
+/// database (and the admin page) is the source of truth, and these are ignored.
+/// </summary>
+public sealed class SetupOptions
+{
+    /// <summary>entra, local or ibmi. Without it, nothing here is used.</summary>
+    public string? Method { get; set; }
+
+    public string? BreakglassPassword { get; set; }
+
+    /// <summary>Stored only when given: otherwise Server__PublicUrl stays in force.</summary>
+    public string? PublicUrl { get; set; }
+
+    public EntraChoiceOptions Entra { get; set; } = new();
+    public LocalChoiceOptions Local { get; set; } = new();
+    public IbmChoiceOptions IbmI { get; set; } = new();
+
+    public sealed class EntraChoiceOptions
+    {
+        public string? TenantId { get; set; }
+        public string? ClientId { get; set; }
+        public string? ClientSecret { get; set; }
+    }
+
+    /// <summary>A first local administrator. Optional: the breakglass administrator can add accounts.</summary>
+    public sealed class LocalChoiceOptions
+    {
+        public string? User { get; set; }
+        public string? Name { get; set; }
+        public string? Password { get; set; }
+    }
+
+    /// <summary>
+    /// The connection (seeded, or already in the database) whose IBM i checks passwords, and which
+    /// of its profiles are administrators. No IBM i password is taken from the environment.
+    /// </summary>
+    public sealed class IbmChoiceOptions
+    {
+        public string? Connection { get; set; }
+        public string? AdminGroups { get; set; }
+        public string? AdminAuthorities { get; set; }
+    }
+
+    public SignInChoice ToChoice() => new(BreakglassPassword, Method,
+        new EntraChoice(Entra.TenantId, Entra.ClientId, Entra.ClientSecret),
+        new LocalChoice(Local.User, Local.Name, Local.Password),
+        new IbmChoice(IbmI.Connection, null, null, null, IbmI.AdminGroups, IbmI.AdminAuthorities),
+        PublicUrl);
+
+    /// <summary>The variable for a field of a setup choice: local.user is Setup__Local__User.</summary>
+    public static string Variable(string field) => "Setup__" + string.Join("__", field.Split('.').Select(part => part switch
+    {
+        "ibmi" => "IbmI",
+        _ => char.ToUpperInvariant(part[0]) + part[1..],
+    }));
+}
 
 /// <summary>POST /auth/setup, and PUT /api/admin/signin (without the token).</summary>
 public sealed record SignInChoice(string? BreakglassPassword, string? Method, EntraChoice? Entra, LocalChoice? Local,
@@ -56,10 +116,40 @@ public sealed partial class SignInSetup(
         LocalName().IsMatch(name) && !string.Equals(name, AppUser.BreakglassId, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The outcome: a problem to answer with, or the administrator to sign the caller in as (if any).</summary>
-    public sealed record Outcome(IResult? Problem, AppUser? SignInAs, string? Warning = null);
+    /// <param name="Field">For a refused choice: which part (such as local.user).</param>
+    /// <param name="Message">For a refused choice: why.</param>
+    public sealed record Outcome(IResult? Problem, AppUser? SignInAs, string? Warning = null, string? Field = null, string? Message = null);
+
+    /// <summary>
+    /// First-run setup from Setup__* (<see cref="SetupOptions"/>), at start: only for a server
+    /// not set up yet, by any node. A refused choice stops the start, saying which variable to fix.
+    /// True when it set the server up.
+    /// </summary>
+    public async Task<bool> ApplyEnvironmentAsync(SetupOptions options, CancellationToken cancel)
+    {
+        if (string.IsNullOrWhiteSpace(options.Method)) return false;
+        if (config.FromEnvironment || config.Mode != SignInMode.Setup)
+        {
+            log.LogInformation("Setup__* is ignored: this server is already set up{Hint}",
+                options.BreakglassPassword is { Length: > 0 } ? "; Setup__BreakglassPassword can be removed from its environment" : "");
+            return false;
+        }
+        var outcome = await ChooseAsync(options.ToChoice(), initial: true, cancel, fromEnvironment: true);
+        if (outcome.Problem is not null)
+            throw new ConfigException(outcome.Field is { } field
+                ? $"{SetupOptions.Variable(field)}: {outcome.Message}"
+                : $"Setup__*: {outcome.Message}");
+        if (outcome.Warning is not null) log.LogWarning("setup from the environment: {Warning}", outcome.Warning);
+        log.LogWarning("set up from the environment (Setup__*): later changes are made on the admin page");
+        return true;
+    }
 
     /// <param name="initial">First-run setup: the server must not be set up yet, and a breakglass password is required.</param>
-    public async Task<Outcome> ChooseAsync(SignInChoice choice, bool initial, CancellationToken cancel)
+    /// <param name="fromEnvironment">
+    /// Setup__* at start: the public URL may be left to Server__PublicUrl, a local administrator
+    /// to the breakglass one, and IBM i sign-in takes no IBM i user (its connection may be a seeded one).
+    /// </param>
+    public async Task<Outcome> ChooseAsync(SignInChoice choice, bool initial, CancellationToken cancel, bool fromEnvironment = false)
     {
         await _one.WaitAsync(cancel);
         try
@@ -71,7 +161,7 @@ public sealed partial class SignInSetup(
 
             // The address people open GreenGlow at. Setup needs it, so the origin check can allow it.
             var publicUrl = PublicAddress.Parse(choice.PublicUrl);
-            if (initial && publicUrl is null)
+            if (initial && publicUrl is null && !fromEnvironment)
                 return Field("publicUrl", "Enter the address people open GreenGlow at, such as http://localhost:8080 or https://greenglow.example.com.");
             if (choice.PublicUrl is not null && publicUrl is null)
                 return Field("publicUrl", "The address is an origin such as http://localhost:8080 or https://greenglow.example.com, with no path.");
@@ -135,7 +225,8 @@ public sealed partial class SignInSetup(
                     if (name.Length == 0)
                     {
                         // Changing method later: fine as long as some local administrator can sign in.
-                        if (initial || !await db.Users.AnyAsync(u => u.Source == UserSource.Local && u.IsAdmin && !u.Disabled && u.PasswordHash != null, cancel))
+                        if (!fromEnvironment && (initial || !await db.Users.AnyAsync(
+                                u => u.Source == UserSource.Local && u.IsAdmin && !u.Disabled && u.PasswordHash != null, cancel)))
                             return Field("local.user", "Enter a user name for the first administrator.");
                     }
                     else
@@ -174,18 +265,37 @@ public sealed partial class SignInSetup(
                         connection.Grants.Add(new ConnectionGrant
                         {
                             PrincipalType = PrincipalType.Group,
-                            PrincipalId = DatabaseDirectory.EveryoneId,
-                            DisplayName = DatabaseDirectory.EveryoneName,
+                            PrincipalId = Everyone.Id,
+                            DisplayName = Everyone.Name,
                         });
                         db.Connections.Add(connection);
                     }
                     else
                     {
                         var name = choice.Ibmi?.Connection?.Trim() ?? "";
-                        connection = await db.Connections.FirstOrDefaultAsync(c => c.Name == name, cancel);
-                        if (connection is null) return Field("ibmi.connection", "Choose the IBM i system that checks passwords, or add it.");
+                        // From the environment it may be one the seed adds once setup is done.
+                        connection = await db.Connections.FirstOrDefaultAsync(c => c.Name == name, cancel)
+                                     ?? (fromEnvironment ? seed.Find(name) : null);
+                        if (connection is null)
+                            return Field("ibmi.connection", fromEnvironment
+                                ? $"There is no connection called \"{name}\" in the database or the connections seed."
+                                : "Choose the IBM i system that checks passwords, or add it.");
                     }
                     if (!connection.Enabled) return Field("ibmi.connection", "That connection is disabled. Enable it first.");
+                    if (choice.Ibmi?.AdminGroups is not null || choice.Ibmi?.AdminAuthorities is not null)
+                    {
+                        if (!IbmAdmins.TryParse(choice.Ibmi.AdminGroups, choice.Ibmi.AdminAuthorities, out var rule, out var field, out var why))
+                            return Field(field == "groups" ? "ibmi.adminGroups" : "ibmi.adminAuthorities", why!);
+                        foreach (var (key, value) in rule.Settings()) values[key] = value;
+                    }
+                    if (fromEnvironment)
+                    {
+                        // No IBM i password in the environment: the breakglass administrator, and
+                        // the profiles the IBM i makes administrators, are the way in.
+                        values[AuthKeys.Method] = "ibmi";
+                        values[AuthKeys.IbmConnection] = connection.Name;
+                        break;
+                    }
                     var user = choice.Ibmi?.User?.Trim() ?? "";
                     var password = choice.Ibmi?.Password ?? "";
                     var target = TargetCatalog.ToTarget(connection);
@@ -256,14 +366,18 @@ public sealed partial class SignInSetup(
     }
 
     private static Outcome Problem(int status, string error, string message) =>
-        new(PasswordLogin.Refused(status, error, message), null);
+        new(PasswordLogin.Refused(status, error, message), null, Message: message);
 
-    private static Outcome Field(string field, string message) => new(ConnectionEndpoints.Problem(field, message), null);
+    private static Outcome Field(string field, string message) =>
+        new(ConnectionEndpoints.Problem(field, message), null, Field: field, Message: message);
 }
 
 /// <summary>The connections to seed (Seed__*), applied at start, or after first-run setup when there was nobody to ask before.</summary>
 public sealed class SeedRunner(IReadOnlyList<HostConnection> seed, IDbContextFactory<GreenGlowDb> dbs, IDirectory directory, TimeProvider clock)
 {
+    /// <summary>A seeded connection by name (a copy), whether or not it is in the database yet.</summary>
+    public HostConnection? Find(string name) => seed.FirstOrDefault(c => c.Name == name) is { } c ? Copy(c) : null;
+
     public async Task<IReadOnlyList<string>> ApplyAsync()
     {
         if (seed.Count == 0) return [];

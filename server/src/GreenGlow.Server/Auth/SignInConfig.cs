@@ -35,6 +35,12 @@ public static class AuthKeys
 
     /// <summary>The name of the connection whose IBM i checks passwords, for IBM i sign-in.</summary>
     public const string IbmConnection = "Auth.IbmI.Connection";
+
+    /// <summary>IBM i sign-in: group profiles whose members are administrators (see IbmAdmins).</summary>
+    public const string IbmAdminGroups = "Auth.IbmI.AdminGroups";
+
+    /// <summary>IBM i sign-in: special authorities that make a profile an administrator (see IbmAdmins).</summary>
+    public const string IbmAdminAuthorities = "Auth.IbmI.AdminAuthorities";
 }
 
 /// <summary>What the environment fixes about sign-in, decided once at start.</summary>

@@ -359,7 +359,7 @@ public sealed class SignInMethodTests
         // The new connection is open to everyone who can sign in with that IBM i.
         var connection = (await Json(await admin.GetAsync("/api/admin/connections"))).GetProperty("connections")[0];
         Assert.Equal("prod", connection.GetProperty("name").GetString());
-        Assert.Equal(DatabaseDirectory.EveryoneId, connection.GetProperty("grants")[0].GetProperty("principalId").GetString());
+        Assert.Equal(Everyone.Id, connection.GetProperty("grants")[0].GetProperty("principalId").GetString());
     }
 
     [Fact]

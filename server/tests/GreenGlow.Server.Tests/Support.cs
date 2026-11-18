@@ -107,8 +107,6 @@ public sealed class RelayFactory(Dictionary<string, string?> settings) : WebAppl
         builder.UseSetting("Auth:DevLogin", "true");
         // Sessions end as soon as their last browser leaves unless a test asks otherwise.
         builder.UseSetting("Sessions:IdleMinutes", "0");
-        // Everyone is in the stand-in directory's "Everyone" group, which SeedJson grants.
-        builder.UseSetting("Dev:Groups", "Everyone=*");
         // Off by default so unrelated tests aren't throttled; RateLimitTests turns it on.
         builder.UseSetting("RateLimit:Enabled", "false");
         foreach (var (key, value) in settings) builder.UseSetting(key, value);
@@ -136,7 +134,7 @@ public sealed class RelayFactory(Dictionary<string, string?> settings) : WebAppl
     /// Seed JSON for test connections given as "name=url,..." with optional "name=label,..."
     /// labels, and an optional per-user session limit for all of them.
     /// </summary>
-    public static readonly string EveryoneGroup = GreenGlow.Server.People.LocalDirectory.GroupId("Everyone");
+    public static readonly string EveryoneGroup = GreenGlow.Server.People.Everyone.Id;
 
     public static string SeedJson(string targets, string labels = "", int maxSessionsPerUser = 3)
     {

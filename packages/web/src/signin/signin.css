@@ -1,0 +1,72 @@
+/* The password sign-in page: one narrow column (.admin-main is in a chunk that may load later). */
+
+.admin-main.signin-main {
+  max-width: 26rem;
+}
+
+.signin-title {
+  margin: 1rem 0 0.5rem;
+  font-size: 1.4rem;
+}
+
+.signin-intro {
+  margin: 0 0 1.25rem;
+  color: var(--muted, #555);
+  line-height: 1.5;
+}
+
+.signin-form {
+  display: grid;
+  gap: 1rem;
+}
+
+/* The grid above would otherwise show a hidden form. */
+.signin-form[hidden],
+.signin-change[hidden] {
+  display: none;
+}
+
+.signin-change {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid var(--line, #c9d3cc);
+  border-radius: 6px;
+}
+
+.signin-change legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+
+.signin-hint {
+  margin: 0;
+  color: var(--muted, #555);
+  font-size: 0.85rem;
+}
+
+.signin-form [aria-invalid='true'] {
+  border-color: #b3261e;
+}
+
+.signin-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.signin-breakglass {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line, #c9d3cc);
+}
+
+.signin-breakglass summary {
+  cursor: pointer;
+  color: var(--muted, #555);
+}
+
+.signin-breakglass .signin-form {
+  margin-top: 1rem;
+}

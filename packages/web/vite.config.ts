@@ -14,6 +14,7 @@ export default defineConfig({
         help: page('help.html'),
         demo: page('demo.html'),
         setup: page('setup.html'),
+        signin: page('signin.html'),
       },
     },
   },
