@@ -33,6 +33,7 @@ import { KeyPanel } from './keypanel.ts';
 import { api } from './admin/api.ts';
 import { MacrosPanel } from './macros.ts';
 import { PrinterPanel, type PrinterSystem } from './printer.ts';
+import { FilesPanel } from './files.ts';
 import { MacroRecorder } from './recorder.ts';
 import { parseHodMacro, writeHodMacro } from './hodmacro.ts';
 import { playMacro, type PlayerHost } from './player.ts';
@@ -725,6 +726,9 @@ async function loadUser(): Promise<void> {
     menuSharing.hidden = true;
     for (const tab of sideTabs) if (tab.dataset.side === 'sharing') tab.hidden = true;
     if (openSide === 'sharing') showSide(undefined);
+    // The demo's fake IBM i has no file server yet: no Files panel or tab.
+    for (const tab of sideTabs) if (tab.dataset.side === 'files') tab.hidden = true;
+    if (openSide === 'files') showSide(undefined);
   }
   idleMinutes = me.idleMinutes;
   userName.textContent = me.name;
@@ -1086,10 +1090,10 @@ const keyPanel = new KeyPanel(
   },
 );
 
-// The side panels: tabs on the window's right edge (Keys, Share, Macros, Printer), each
+// The side panels: tabs on the window's right edge (Keys, Share, Macros, Printer, Files), each
 // pulling its panel out; one at a time, kept per browser (side.css).
-type Side = 'keys' | 'sharing' | 'macros' | 'printer';
-const SIDES: readonly Side[] = ['keys', 'sharing', 'macros', 'printer'];
+type Side = 'keys' | 'sharing' | 'macros' | 'printer' | 'files';
+const SIDES: readonly Side[] = ['keys', 'sharing', 'macros', 'printer', 'files'];
 const SIDE_KEY = 'greenglow.side';
 const sideTabs = [...document.querySelectorAll<HTMLButtonElement>('.side-tab')];
 const macrosRoot = element<HTMLElement>('#macros-panel');
@@ -1118,12 +1122,20 @@ const printer = new PrinterPanel(printerRoot, () => {
   focusScreen();
 });
 
+// Files: download from the IFS of the system of the tab showing (files.ts).
+const filesRoot = element<HTMLElement>('#files-panel');
+const filesPanel = new FilesPanel(filesRoot, () => {
+  showSide(undefined);
+  focusScreen();
+});
+
 /**
- * The panel follows the tab's system and IBM i user: when the systems load, one is chosen or
- * connected to, a session is joined, the tab changes, or its session signs on.
+ * The Printer and Files panels follow the tab's system and IBM i user: when the systems load,
+ * one is chosen or connected to, a session is joined, the tab changes, or its session signs on.
  */
 function followPrinter(): void {
   if (openSide === 'printer') void printer.show(printerSystem());
+  if (openSide === 'files') void filesPanel.show(printerSystem());
 }
 
 /**
@@ -1290,7 +1302,7 @@ function endRecording(said: string): void {
 let openSide: Side | undefined;
 
 function showSide(side: Side | undefined): void {
-  if (side === 'sharing' && demo) side = undefined;
+  if ((side === 'sharing' || side === 'files') && demo) side = undefined;
   openSide = side;
   keyPanel.open = side === 'keys';
   if (side === 'sharing') {
@@ -1301,6 +1313,8 @@ function showSide(side: Side | undefined): void {
   if (side === 'macros') void macros.refresh();
   printerRoot.hidden = side !== 'printer';
   if (side === 'printer') void printer.show(printerSystem());
+  filesRoot.hidden = side !== 'files';
+  if (side === 'files') void filesPanel.show(printerSystem());
   if (side) document.documentElement.dataset.side = side;
   else delete document.documentElement.dataset.side;
   for (const tab of sideTabs) tab.setAttribute('aria-expanded', String(tab.dataset.side === side));
@@ -1321,6 +1335,7 @@ function toggleSide(side: Side): void {
   showSide(opening ? side : undefined);
   if (opening && side === 'sharing') sharing.focus();
   if (opening && side === 'printer') printer.focus();
+  else if (opening && side === 'files') filesPanel.focus();
   else focusScreen();
 }
 for (const tab of sideTabs)
@@ -1899,6 +1914,10 @@ window.addEventListener(
       event.preventDefault();
       event.stopPropagation();
       toggleSide('printer');
+    } else if (event.code === 'KeyI' && !demo) {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleSide('files');
     }
   },
   true,
@@ -2086,10 +2105,11 @@ try {
 showLog(logSaved === 'open');
 try {
   const side = storage()?.getItem(SIDE_KEY);
-  // Every panel but Printer reopens where it was left. Printer waits for the user to click it
-  // (its tab or Alt+P), because opening it asks for the IBM i password, which must never be
-  // asked for on its own when the page loads.
-  if (side !== 'printer' && SIDES.includes(side as Side)) showSide(side as Side);
+  // Every panel but Printer and Files reopens where it was left. They wait for the user to click
+  // them (their tab, Alt+P or Alt+I), because opening one asks for the IBM i password, which must
+  // never be asked for on its own when the page loads.
+  if (side !== 'printer' && side !== 'files' && SIDES.includes(side as Side))
+    showSide(side as Side);
 } catch {
   // Storage blocked: start closed.
 }

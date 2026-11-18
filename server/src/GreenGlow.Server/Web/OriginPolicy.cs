@@ -1,4 +1,5 @@
 using GreenGlow.Server.Configuration;
+using GreenGlow.Server.Data;
 
 namespace GreenGlow.Server.Web;
 
@@ -10,9 +11,12 @@ namespace GreenGlow.Server.Web;
 public sealed class OriginPolicy
 {
     private readonly HashSet<string> _allowed;
+    private readonly SettingsStore? _settings;
 
-    public OriginPolicy(ServerOptions options)
+    /// <param name="settings">Where setup saved the address people open GreenGlow at; none in unit tests.</param>
+    public OriginPolicy(ServerOptions options, SettingsStore? settings = null)
     {
+        _settings = settings;
         _allowed = new HashSet<string>(StringComparer.Ordinal) { OriginOf(options.PublicUrl, "Server:PublicUrl") };
         foreach (var origin in options.AllowedOrigins.Where(o => !string.IsNullOrWhiteSpace(o)))
             _allowed.Add(OriginOf(origin.Trim(), "Server:AllowedOrigins"));
@@ -20,7 +24,10 @@ public sealed class OriginPolicy
 
     public IReadOnlyCollection<string> Allowed => _allowed;
 
-    public bool IsAllowed(string? origin) => !string.IsNullOrEmpty(origin) && _allowed.Contains(origin);
+    /// <summary>The configured origins, and the one setup saved (which may be changed by an administrator later).</summary>
+    public bool IsAllowed(string? origin) =>
+        !string.IsNullOrEmpty(origin)
+        && (_allowed.Contains(origin) || PublicAddress.Parse(_settings?.Text(PublicAddress.Setting)) == origin);
 
     private static string OriginOf(string value, string setting)
     {
@@ -43,6 +50,11 @@ public static class OriginCheck
         {
             var method = context.Request.Method;
             if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method))
+                return next(context);
+            // First-run setup comes from whatever address the operator uses to reach the server, which
+            // isn't known yet; it is one-time (the server answers 409 afterwards).
+            if (context.Request.Path.Equals("/auth/setup", StringComparison.OrdinalIgnoreCase)
+                && context.RequestServices.GetRequiredService<Auth.SignInConfig>().Mode == Auth.SignInMode.Setup)
                 return next(context);
             // Entra ID posts the sign-in result from its own origin; the handler checks state and nonce.
             if (context.Request.Path.Equals(Auth.AuthSetup.CallbackPath, StringComparison.OrdinalIgnoreCase)

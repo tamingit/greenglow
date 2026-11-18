@@ -24,5 +24,6 @@ public sealed class TargetCatalog(IDbContextFactory<GreenGlowDb> dbs)
     }
 
     public static Target ToTarget(HostConnection c) =>
-        new(c.Name, c.Label, c.Secure, c.Host, c.Port, c.MaxSessionsPerUser, c.IsTest, c.Color, c.TrustedCaPem, c.TrustedName);
+        new(c.Name, c.Label, c.Secure, c.Host, c.Port, c.MaxSessionsPerUser, c.IsTest, c.Color, c.TrustedCaPem, c.TrustedName,
+            c.UsePortMapper);
 }

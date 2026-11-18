@@ -22,6 +22,17 @@ What users get:
 - **Sharing.** The owner of a session can share it with named people, view-only or with full access (they can take control and type under the owner's IBM i user). Links work only for the people named.
 - **Administration** (`admin.html`): administrators, connections and access, the connection log (with CSV), and the session limits.
 
+## Quickest start
+
+Nothing needs configuring before the first run. Start the container, open the setup link from its log and choose how people sign in:
+
+```bash
+docker compose up --build
+docker compose logs greenglow    # the line that says GreenGlow is not set up has the link
+```
+
+Setup asks for a breakglass password and the sign-in method: Microsoft Entra ID, local accounts, or IBM i user profiles (checked on the IBM i you name, which becomes the first administrator). After that, add IBM i systems on the admin page, and the server runs with no `.env` or `config/` file at all. The sections below are for development and for settings you want in files.
+
 ## Getting started
 
 You need:
@@ -42,7 +53,7 @@ cp config/connections.example.json config/connections.json
 
 Then:
 
-1. **Edit `config/connections.json`** and list the IBM i systems you want, using their real host names. `tls://` is verified TLS for production. `tcp://` is plain Telnet, only for the test system, which has no TLS. The file seeds the database on first start; after that, administrators manage connections on the admin page.
+1. **Edit `config/connections.json`** and list the IBM i systems you want, using their real host names. `tls://` is verified TLS for production. `tcp://` is plain Telnet, only for the test system, which has no TLS. The file is optional and seeds the database on first start; after that, administrators manage connections on the admin page.
 2. **Add the CA certificate** for `tls://` connections as `certs/ibmi-ca.pem`. It's the root CA your IBM i certificate chains to (often an internal CA your Windows PC already trusts). Export it as a Base-64 (PEM) file.
 
 `.env`, `config/connections.json` and `certs/` are gitignored. Never commit host names, certificates or session recordings.
@@ -71,7 +82,7 @@ Settings use ASP.NET Core names (`Section__Key`) in the environment, and in deve
 - `Entra__TenantId`, `Entra__ClientId`, `Entra__ClientSecret`, `Entra__InitialAdminUpn`: sign-in. The app registration needs the Microsoft Graph application permissions `User.ReadBasic.All` and `GroupMember.Read.All`, with admin consent, to search people and groups. Production refuses to start without Entra ID.
 - `Auth__DevLogin`: sign in as any UPN. Development and tests only, and never with Entra ID configured.
 - `Data__DbPath`: the SQLite file. Keep it, and the `keys` folder beside it, on a volume.
-- `Seed__ConnectionsFile` or `Seed__ConnectionsJson`: the connections to add on first start.
+- `Seed__ConnectionsFile` or `Seed__ConnectionsJson` (optional): the connections to add on first start. Without them, connections are managed on the admin page.
 - `Relay__CaFile` or `Relay__CaPem`: the CA for `tls://` connections.
 - `Sessions__MaxFrontends` (browsers per session, default 2), `Sessions__IdleMinutes` (default 5) and `Sessions__MaxConnections` (default 50): defaults that administrators can change on the admin page.
 

@@ -160,6 +160,8 @@ try {
       Dev__Groups: 'Developers=dev.user@example.com,Everyone=*',
       // Device names are GG, the node and a number: the same ones each run on a real system.
       Cluster__NodeId: process.env.E2E_IBMI_NODE ?? '7',
+      // Small pages, so the live Files test pages through a system folder (it has a few hundred).
+      Files__PageSize: '100',
       ...(process.env.E2E_IBMI_CA_FILE ? { Relay__CaFile: process.env.E2E_IBMI_CA_FILE } : {}),
       ...(process.env.E2E_IBMI_CA_PEM ? { Relay__CaPem: process.env.E2E_IBMI_CA_PEM } : {}),
     },

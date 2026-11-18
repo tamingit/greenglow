@@ -134,8 +134,22 @@ public sealed class SignOnWatch
     public bool SignedOn { get; private set; }
     public string? IbmUser { get; private set; }
 
+    private bool _automatic;
+
+    /// <summary>
+    /// The session signed on during negotiation: there was no sign-on screen to learn, so it
+    /// counts as signed on, as that user, for as long as it lasts.
+    /// </summary>
+    public void SignedOnAs(string ibmUser)
+    {
+        _automatic = true;
+        SignedOn = true;
+        IbmUser = ibmUser;
+    }
+
     public void See(ScreenSnapshot snapshot)
     {
+        if (_automatic) return;
         if (_signOnLayout is null)
         {
             if (snapshot.Keyboard != KeyboardState.Locked && snapshot.Fields.Count > 0)
@@ -151,7 +165,7 @@ public sealed class SignOnWatch
     /// <summary>Call with the screen as it is just before an AID key is sent.</summary>
     public void BeforeAid(ScreenSnapshot snapshot)
     {
-        if (_signOnLayout is null || ScreenFacts.Layout(snapshot) != _signOnLayout) return;
+        if (_automatic || _signOnLayout is null || ScreenFacts.Layout(snapshot) != _signOnLayout) return;
         var user = snapshot.Fields.FirstOrDefault(f => !Display.IsNondisplay(f.Attribute) && !f.Format.Bypass);
         if (user is null) return;
         var text = Display.FieldText(snapshot, user).Trim().ToUpperInvariant();

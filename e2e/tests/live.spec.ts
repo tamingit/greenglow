@@ -134,4 +134,182 @@ test.describe('live test system', () => {
     await signOff(page);
     await expect(viewer.locator('#terminal .offline')).toBeVisible({ timeout: 30_000 });
   });
+
+  test('the Files panel browses folders, downloads a system file, and says why another fails', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    await signIn(page, LIVE_UPN);
+    await signOnLive(page);
+
+    await page.keyboard.press('Alt+i');
+    const panel = page.locator('#files-panel');
+    await expect(panel).toBeVisible();
+    // The session's IBM i user is offered; the password is set from inside the page.
+    await expect(panel.getByLabel('IBM i user')).toHaveValue(user!.toUpperCase());
+    await panel.getByLabel('Password').evaluate((box: HTMLInputElement, secret) => {
+      box.value = secret ?? '';
+    }, password);
+    await panel.getByRole('button', { name: 'Sign on', exact: true }).click();
+    await expect(panel).toContainText(`Signed on as ${user!.toUpperCase()}`, { timeout: 30_000 });
+    expect(await panel.getByLabel('Password').count()).toBe(0);
+
+    // It lists a folder at once: the user's home folder, or the root.
+    await expect(panel.getByRole('status')).toHaveText(/folder|file|empty/, { timeout: 30_000 });
+
+    // A folder typed in opens; its folders come first, with a / after their names.
+    const where = panel.getByLabel('Path of a folder or file');
+    await where.fill('/QOpenSys/usr');
+    await panel.getByRole('button', { name: 'Go' }).click();
+    const usr = panel.getByRole('list', { name: 'Contents of /QOpenSys/usr' });
+    await expect(usr.getByRole('button', { name: /^bin\// })).toBeVisible();
+    await usr.getByRole('button', { name: /^bin\// }).click();
+    const bin = panel.getByRole('list', { name: 'Contents of /QOpenSys/usr/bin' });
+    await expect(bin).toBeVisible();
+    await expect(where).toHaveValue('/QOpenSys/usr/bin');
+
+    // The e2e server shows 100 at a time: the last row fetches the next 100.
+    const more = bin.getByRole('button', {
+      name: 'Only 100 shown. Click here to fetch next 100 items.',
+    });
+    await expect(more).toBeVisible();
+    await more.click();
+    await expect(
+      bin.getByRole('button', { name: /^Only 200 shown\.|^ls\b/ }).first(),
+    ).toBeVisible();
+    // Fetch until ls, which comes past the first page, is there.
+    for (let i = 0; i < 10 && !(await bin.getByRole('button', { name: /^ls\b/ }).count()); i++) {
+      const next = bin.getByRole('button', { name: /^Only \d+ shown\./ });
+      if (!(await next.count())) break;
+      await next.click();
+    }
+
+    // A PASE program every IBM i with PASE has: a click downloads it with its own name.
+    const downloading = page.waitForEvent('download');
+    await bin.getByRole('button', { name: /^ls\b/ }).first().click();
+    const download = await downloading;
+    expect(download.suggestedFilename()).toBe('ls');
+    const { readFile } = await import('node:fs/promises');
+    const bytes = await readFile(await download.path());
+    expect(bytes.length).toBeGreaterThan(1000);
+    expect([...bytes.subarray(0, 2)]).toEqual([0x01, 0xf7]);
+    await expect(panel.getByRole('status')).toContainText('Downloading ls');
+    await expect(panel.getByRole('list', { name: 'Recent downloads' })).toContainText(
+      '/QOpenSys/usr/bin/ls',
+    );
+
+    // Up goes back to the folder this one is in.
+    await panel.getByRole('button', { name: '↑ Up' }).click();
+    await expect(usr).toBeVisible();
+
+    // A path that isn't there says so in the panel; nothing downloads, and the folder stays.
+    await where.fill('/greenglow-no-such-folder/x.txt');
+    await panel.getByRole('button', { name: 'Go' }).click();
+    await expect(panel.getByRole('status')).toHaveText('There is no such folder.');
+    await expect(usr).toBeVisible();
+
+    await panel.getByRole('button', { name: 'Sign off' }).click();
+    await expect(panel.getByLabel('IBM i user')).toBeVisible();
+    await page.keyboard.press('Escape');
+    // Ends the Telnet session from the page, whatever screen the IBM i shows.
+    await disconnect(page);
+    await page.getByRole('alertdialog').getByRole('button', { name: 'End session' }).click();
+    await expect(page.locator('#terminal .offline')).toBeVisible({ timeout: 30_000 });
+  });
+
+  test('the Files panel uploads, refuses what is there and replaces it, makes, renames and deletes, in /tmp', async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+    const { mkdtemp, mkdir, writeFile } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const paths = await import('node:path');
+    const join = (...parts: string[]) => paths.join(...parts);
+    // A folder of placeholder files, with a name of its own, made here and uploaded whole.
+    const name = `greenglow-e2e-${Date.now().toString(36)}`;
+    const local = join(await mkdtemp(join(tmpdir(), 'gg-')), name);
+    await mkdir(join(local, 'sub'), { recursive: true });
+    await writeFile(join(local, 'a.txt'), 'placeholder a\n');
+    await writeFile(join(local, 'sub', 'b.txt'), 'placeholder b\n');
+
+    await signIn(page, LIVE_UPN);
+    await signOnLive(page);
+    await page.keyboard.press('Alt+i');
+    const panel = page.locator('#files-panel');
+    await panel.getByLabel('Password').evaluate((box: HTMLInputElement, secret) => {
+      box.value = secret ?? '';
+    }, password);
+    await panel.getByRole('button', { name: 'Sign on', exact: true }).click();
+    await expect(panel).toContainText('Signed on as', { timeout: 30_000 });
+    const where = panel.getByLabel('Path of a folder or file');
+    await where.fill('/tmp');
+    await panel.getByRole('button', { name: 'Go' }).click();
+    await expect(panel.getByRole('list', { name: 'Contents of /tmp' })).toBeVisible();
+
+    const folderInput = panel.locator('input[type=file][webkitdirectory]');
+    await folderInput.setInputFiles(local);
+    await expect(panel.getByRole('status')).toHaveText('Uploaded 2 files.', { timeout: 60_000 });
+    const tmp = panel.getByRole('list', { name: 'Contents of /tmp' });
+    await expect(tmp.getByRole('button', { name: new RegExp(`^${name}/`) })).toBeVisible();
+
+    // Again: both are there already, and nothing is replaced until asked.
+    await folderInput.setInputFiles(local);
+    await expect(panel.getByRole('status')).toHaveText('2 files already there, not replaced.', {
+      timeout: 60_000,
+    });
+    await panel.getByRole('button', { name: 'Replace the 2 already there' }).click();
+    await expect(panel.getByRole('status')).toHaveText('Uploaded 2 files.', { timeout: 60_000 });
+
+    // Files chosen go into the folder shown.
+    await tmp.getByRole('button', { name: new RegExp(`^${name}/`) }).click();
+    await expect(panel.getByRole('list', { name: `Contents of /tmp/${name}` })).toBeVisible();
+    await panel.locator('input[type=file]:not([webkitdirectory])').setInputFiles([
+      { name: 'c.txt', mimeType: 'text/plain', buffer: Buffer.from('placeholder c\n') },
+      { name: 'd.txt', mimeType: 'text/plain', buffer: Buffer.from('placeholder d\n') },
+    ]);
+    await expect(panel.getByRole('status')).toHaveText('Uploaded 2 files.', { timeout: 60_000 });
+    const inside = panel.getByRole('list', { name: `Contents of /tmp/${name}` });
+    for (const file of ['a.txt', 'c.txt', 'd.txt', 'sub/'])
+      await expect(inside.getByRole('button', { name: new RegExp(`^${file}`) })).toBeVisible();
+
+    // New folder, Rename (F2) and Delete, then the whole folder and everything in it.
+    await panel.getByRole('button', { name: 'New folder…' }).click();
+    await panel.getByLabel(`Name of the new folder in /tmp/${name}`).fill('made');
+    await panel.getByRole('button', { name: 'Make' }).click();
+    await expect(panel.getByRole('status')).toHaveText('Made made/.');
+    await expect(inside.getByRole('button', { name: /^made\// })).toBeVisible();
+
+    await inside.getByRole('button', { name: /^c\.txt/ }).focus();
+    await page.keyboard.press('F2');
+    await panel.getByLabel('New name for c.txt').fill('renamed.txt');
+    await page.keyboard.press('Enter');
+    await expect(panel.getByRole('status')).toHaveText('Renamed c.txt to renamed.txt.');
+    await expect(inside.getByRole('button', { name: /^renamed\.txt/ })).toBeVisible();
+
+    await panel.getByRole('button', { name: 'Delete d.txt (Delete)' }).click();
+    await panel
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click();
+    await expect(panel.getByRole('status')).toHaveText('Deleted d.txt.');
+
+    await panel.getByRole('button', { name: '↑ Up' }).click();
+    await expect(tmp).toBeVisible();
+    await panel.getByRole('button', { name: `Delete ${name} (Delete)` }).click();
+    await panel
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Delete', exact: true })
+      .click();
+    await panel.getByRole('alertdialog').getByRole('button', { name: 'Delete everything' }).click();
+    await expect(panel.getByRole('status')).toContainText(`Deleted ${name}/ and everything in it`);
+    await expect(tmp.getByRole('button', { name: new RegExp(`^${name}/`) })).toHaveCount(0);
+
+    await panel.getByRole('button', { name: 'Sign off' }).click();
+    await expect(panel.getByLabel('IBM i user')).toBeVisible();
+    await page.keyboard.press('Escape');
+    // Ends the Telnet session from the page, whatever screen the IBM i shows.
+    await disconnect(page);
+    await page.getByRole('alertdialog').getByRole('button', { name: 'End session' }).click();
+    await expect(page.locator('#terminal .offline')).toBeVisible({ timeout: 30_000 });
+  });
 });

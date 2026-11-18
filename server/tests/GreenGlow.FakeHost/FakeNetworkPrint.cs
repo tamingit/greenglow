@@ -56,8 +56,14 @@ public sealed class FakeNetworkPrint : IAsyncDisposable
 
     public string Password { get; set; } = DefaultPassword;
 
-    /// <summary>QPWDLVL: 0 or 1 for DES substitutes, 2 or 3 for SHA-1.</summary>
+    /// <summary>QPWDLVL: 0 or 1 for DES substitutes, 2 or 3 for SHA-1, 4 for SHA-512.</summary>
     public int PasswordLevel { get; set; } = 2;
+
+    /// <summary>
+    /// When set, the users and passwords (and password level) shared with the fake sign-on
+    /// server, in place of User and Password: a password changed there is the one to use here.
+    /// </summary>
+    public FakeAccounts? Accounts { get; set; }
 
     /// <summary>When set, Start Server answers with this return code whatever is sent.</summary>
     public int? Refuse { get; set; }
@@ -144,7 +150,7 @@ public sealed class FakeNetworkPrint : IAsyncDisposable
         Require(seedRequest, 0x7001);
         var clientSeed = seedRequest.AsSpan(20, 8).ToArray();
         var serverSeed = RandomNumberGenerator.GetBytes(8);
-        var level = PasswordLevel;
+        var level = Accounts?.PasswordLevel ?? PasswordLevel;
         var seedReply = Frame(0xF001, [0, 0, 0, 0, .. serverSeed], (byte)level);
         await stream.WriteAsync(seedReply, _stop.Token);
 
@@ -157,17 +163,19 @@ public sealed class FakeNetworkPrint : IAsyncDisposable
 
         int rc;
         if (Refuse is { } refuse) rc = refuse;
+        else if (Accounts is { } accounts) rc = accounts.Check(user, scheme, level, substitute, clientSeed, serverSeed);
         else if (user != User) rc = 0x00020001;
-        else if (scheme != (level < 2 ? 0x01 : 0x03)) rc = 0x00010009;
+        else if (scheme != FakeCrypto.Scheme(level)) rc = 0x00010009;
         else rc = substitute.AsSpan().SequenceEqual(Expected(level, clientSeed, serverSeed)) ? 0 : 0x0003000B;
+        // Counted before the reply: a test reads the count as soon as the client has its answer.
+        if (rc == 0) Interlocked.Increment(ref _signOns);
+        else Interlocked.Increment(ref _refusals);
         await stream.WriteAsync(Frame(0xF002, [(byte)(rc >> 24), (byte)(rc >> 16), (byte)(rc >> 8), (byte)rc]), _stop.Token);
         if (rc != 0)
         {
-            Interlocked.Increment(ref _refusals);
             Log($"print #{id} sign-on refused ({rc:X8})");
             return false;
         }
-        Interlocked.Increment(ref _signOns);
         Log($"print #{id} signed on as {user}");
         return true;
     }
@@ -354,76 +362,8 @@ public sealed class FakeNetworkPrint : IAsyncDisposable
         return bytes;
     }
 
-    private byte[] Expected(int level, byte[] clientSeed, byte[] serverSeed)
-    {
-        var id = User.PadRight(10);
-        if (level >= 2)
-        {
-            var idBytes = Encoding.BigEndianUnicode.GetBytes(id);
-            var token = SHA1.HashData([.. idBytes, .. Encoding.BigEndianUnicode.GetBytes(Password)]);
-            return SHA1.HashData([.. token, .. serverSeed, .. clientSeed, .. idBytes, 0, 0, 0, 0, 0, 0, 0, 1]);
-        }
-
-        // DES: the token enciphers the (folded) user ID under the password, shifted; the
-        // substitute is a CBC MAC under the token over five blocks.
-        var userId = Ebcdic.Encode(id);
-        var password = Password.ToUpperInvariant();
-        if (char.IsAsciiDigit(password[0])) password = "Q" + password;
-        var pwd = Ebcdic.Encode(password.PadRight(10));
-        var folded = Fold(userId);
-        var length = Array.FindIndex(pwd, b => b == 0x40) is var n and >= 0 ? n : 10;
-        var desToken = Des(Key(pwd.AsSpan(0, Math.Min(8, length))), folded);
-        if (length > 8)
-        {
-            var second = Des(Key(pwd.AsSpan(8, length - 8)), folded);
-            desToken = BitConverter.GetBytes(BitConverter.ToUInt64(desToken) ^ BitConverter.ToUInt64(second));
-        }
-        var seq = BinaryPrimitives.ReadUInt64BigEndian(serverSeed) + 1;
-        var rdr = new byte[8];
-        BinaryPrimitives.WriteUInt64BigEndian(rdr, seq);
-        byte[] blocks =
-        [
-            .. rdr,
-            .. clientSeed,
-            .. userId.Take(8).Select((b, i) => (byte)(b ^ rdr[i])),
-            .. new byte[] { userId[8], userId[9], 0x40, 0x40, 0x40, 0x40, 0x40, 0x40 }.Select((b, i) => (byte)(b ^ rdr[i])),
-            0, 0, 0, 0, 0, 0, 0, 1,
-        ];
-        using var des = System.Security.Cryptography.DES.Create();
-        des.Key = desToken;
-        return des.EncryptCbc(blocks, new byte[8], PaddingMode.None)[^8..];
-    }
-
-    /// <summary>Characters 9 and 10 of a long user ID, two bits at a time, into the top of bytes 1 to 8.</summary>
-    private static byte[] Fold(byte[] userId)
-    {
-        var folded = userId[..8];
-        if (userId[8] == 0x40) return folded;
-        for (var bit = 0; bit < 16; bit += 2)
-        {
-            var source = userId[8 + bit / 8];
-            var pair = (source >> (6 - bit % 8)) & 0x03;
-            folded[bit / 2] ^= (byte)(pair << 6);
-        }
-        return folded;
-    }
-
-    private static byte[] Key(ReadOnlySpan<byte> part)
-    {
-        var block = new byte[8];
-        block.AsSpan().Fill(0x40);
-        part.CopyTo(block);
-        var value = (BinaryPrimitives.ReadUInt64BigEndian(block) ^ 0x5555555555555555UL) << 1;
-        BinaryPrimitives.WriteUInt64BigEndian(block, value);
-        return block;
-    }
-
-    private static byte[] Des(byte[] key, byte[] block)
-    {
-        using var des = System.Security.Cryptography.DES.Create();
-        des.Key = key;
-        return des.EncryptEcb(block, PaddingMode.None);
-    }
+    private byte[] Expected(int level, byte[] clientSeed, byte[] serverSeed) =>
+        FakeCrypto.Substitute(level, User, Password, clientSeed, serverSeed);
 
     private static Dictionary<int, byte[]> CodePoints(byte[] frame, int at)
     {

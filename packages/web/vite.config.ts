@@ -13,6 +13,7 @@ export default defineConfig({
         admin: page('admin.html'),
         help: page('help.html'),
         demo: page('demo.html'),
+        setup: page('setup.html'),
       },
     },
   },

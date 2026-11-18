@@ -54,6 +54,12 @@ public sealed class RateLimitOptions
 
     /// <summary>Printer sign-on attempts one user may make per minute (/api/printer/*/signon).</summary>
     public int SignOnPerMinute { get; set; } = 10;
+
+    /// <summary>
+    /// Password sign-ins one client address may try per minute (local accounts, IBM i sign-in,
+    /// the breakglass administrator, first-run setup).
+    /// </summary>
+    public int PasswordPerMinute { get; set; } = 10;
 }
 
 /// <summary>
@@ -74,6 +80,25 @@ public sealed class DemoOptions
 }
 
 /// <summary>Printer output: the IBM i Network Print server.</summary>
+/// <summary>The Files panel (Files__*).</summary>
+public sealed class FilesOptions
+{
+    /// <summary>How long, in minutes, an unused file server sign-on lasts.</summary>
+    public int IdleMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// The CCSID a file the Files panel creates is tagged with (1208: UTF-8). The bytes are never
+    /// converted; the tag says how an IBM i program should read them.
+    /// </summary>
+    public int UploadCcsid { get; set; } = 1208;
+
+    /// <summary>How many entries of a folder the panel shows at a time (the rest a page at a time).</summary>
+    public int PageSize { get; set; } = 2000;
+
+    /// <summary>The largest file one upload may send, in megabytes.</summary>
+    public int MaxUploadMegabytes { get; set; } = 2048;
+}
+
 public sealed class PrinterOptions
 {
     /// <summary>How long a signed-on print session lasts without use.</summary>

@@ -253,7 +253,9 @@ public sealed class PrinterTests
     public async Task ThePrintServerIsTheConnectionsHostOnTheDefaultPorts()
     {
         await using var prints = new PrintSessions(new Relay.HostConnector(null), null!, TimeProvider.System,
-            new Configuration.PrinterOptions(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PrintSessions>.Instance);
+            new Configuration.PrinterOptions(),
+            new HostServers.HostEndpoints(new HostServers.HostServerOptions(), new Configuration.PrinterOptions(), TimeProvider.System),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<PrintSessions>.Instance);
         var secure = new Configuration.Target("prod", "Production", true, "ibmi.example", 992);
         Assert.Equal(9474, prints.EndpointFor(secure).Port);
         Assert.Equal(8474, prints.EndpointFor(secure with { Secure = false, Port = 23 }).Port);

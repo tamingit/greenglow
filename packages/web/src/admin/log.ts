@@ -12,7 +12,7 @@ interface Row {
   id: string;
   /** The node that wrote it; 0 for rows from before nodes. */
   node: number;
-  kind: 'session' | 'frontend' | 'certificate' | 'printer' | 'node';
+  kind: 'session' | 'frontend' | 'certificate' | 'printer' | 'files' | 'node';
   sessionId: string;
   upn: string | null;
   clientIp: string | null;
@@ -53,6 +53,10 @@ function what(row: Row): string {
   if (row.kind === 'printer') {
     const files = row.filesOpened ?? 0;
     return `Printer output (${files} ${files === 1 ? 'file' : 'files'} opened)`;
+  }
+  if (row.kind === 'files') {
+    const files = row.filesOpened ?? 0;
+    return `Files (${files} ${files === 1 ? 'file' : 'files'} transferred)`;
   }
   if (row.kind === 'node') return 'Server node';
   if (row.kind === 'certificate')
@@ -97,6 +101,7 @@ export function logPanel(): { element: HTMLElement; load(): Promise<void> } {
     h('option', { value: 'frontend', text: 'Browsers' }),
     h('option', { value: 'certificate', text: 'Certificates trusted' }),
     h('option', { value: 'printer', text: 'Printer output' }),
+    h('option', { value: 'files', text: 'Files' }),
     h('option', { value: 'node', text: 'Nodes drained or resynced' }),
   );
   const from = h('input', { class: 'admin-input', id: 'log-from', type: 'datetime-local' });
