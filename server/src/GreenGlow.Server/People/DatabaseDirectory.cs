@@ -7,19 +7,12 @@ namespace GreenGlow.Server.People;
 
 /// <summary>
 /// The directory when people sign in with local accounts or IBM i user profiles: the users
-/// are the ones in the database, and there is one group, Everyone, which every one of them is
-/// in. With IBM i sign-in a user profile nobody has signed in with yet can still be named (to
-/// give it access, or make it an administrator, ahead of its first sign-in).
+/// are the ones in the database, and there are no groups but the built-in Everyone (which
+/// CurrentDirectory adds). With IBM i sign-in a user profile nobody has signed in with yet can
+/// still be named (to give it access, or make it an administrator, ahead of its first sign-in).
 /// </summary>
 public sealed class DatabaseDirectory(IDbContextFactory<GreenGlowDb> dbs, SignInConfig config) : IDirectory
 {
-    public const string EveryoneName = "Everyone";
-
-    /// <summary>The Everyone group's ID.</summary>
-    public static readonly string EveryoneId = LocalDirectory.GroupId(EveryoneName);
-
-    private static readonly DirectoryEntry Everyone = new(EveryoneId, EveryoneName, null);
-
     private UserSource Source => config.Mode == SignInMode.IbmI ? UserSource.IbmI : UserSource.Local;
 
     public async Task<DirectoryEntry?> FindUserAsync(string upn, CancellationToken cancel = default)
@@ -55,23 +48,20 @@ public sealed class DatabaseDirectory(IDbContextFactory<GreenGlowDb> dbs, SignIn
     }
 
     public Task<IReadOnlyList<DirectoryEntry>> SearchGroupsAsync(string query, CancellationToken cancel = default) =>
-        Task.FromResult<IReadOnlyList<DirectoryEntry>>(
-            EveryoneName.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase) ? [Everyone] : []);
+        Task.FromResult<IReadOnlyList<DirectoryEntry>>([]);
 
     public Task<IReadOnlyList<DirectoryEntry>> FindGroupsByNameAsync(string name, CancellationToken cancel = default) =>
-        Task.FromResult<IReadOnlyList<DirectoryEntry>>(
-            string.Equals(name.Trim(), EveryoneName, StringComparison.OrdinalIgnoreCase) ? [Everyone] : []);
+        Task.FromResult<IReadOnlyList<DirectoryEntry>>([]);
 
-    public async Task<IReadOnlySet<string>> MemberGroupsAsync(string userId, CancellationToken cancel = default)
-    {
-        await using var db = await dbs.CreateDbContextAsync(cancel);
-        return await db.Users.AnyAsync(u => u.Id == userId && !u.Disabled, cancel) ? new HashSet<string> { EveryoneId } : [];
-    }
+    public Task<IReadOnlySet<string>> MemberGroupsAsync(string userId, CancellationToken cancel = default) =>
+        Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
 }
 
 /// <summary>
 /// The directory for the sign-in method in force: Microsoft Graph with Entra ID, the stand-in
-/// with the dev login, and the database's own users otherwise.
+/// with the dev login, and the database's own users otherwise. Each has the built-in group
+/// Everyone too: searches offer it, and its name always means it (Access makes every signed-in
+/// user a member).
 /// </summary>
 public sealed class CurrentDirectory(SignInConfig config, IServiceProvider services) : IDirectory
 {
@@ -90,11 +80,16 @@ public sealed class CurrentDirectory(SignInConfig config, IServiceProvider servi
     public Task<IReadOnlyList<DirectoryEntry>> SearchUsersAsync(string query, CancellationToken cancel = default) =>
         Inner.SearchUsersAsync(query, cancel);
 
-    public Task<IReadOnlyList<DirectoryEntry>> SearchGroupsAsync(string query, CancellationToken cancel = default) =>
-        Inner.SearchGroupsAsync(query, cancel);
+    public async Task<IReadOnlyList<DirectoryEntry>> SearchGroupsAsync(string query, CancellationToken cancel = default)
+    {
+        var found = await Inner.SearchGroupsAsync(query, cancel);
+        return Everyone.Name.Contains(query.Trim(), StringComparison.OrdinalIgnoreCase)
+            ? [Everyone.Entry, .. found.Where(g => g.Id != Everyone.Id)]
+            : found;
+    }
 
-    public Task<IReadOnlyList<DirectoryEntry>> FindGroupsByNameAsync(string name, CancellationToken cancel = default) =>
-        Inner.FindGroupsByNameAsync(name, cancel);
+    public async Task<IReadOnlyList<DirectoryEntry>> FindGroupsByNameAsync(string name, CancellationToken cancel = default) =>
+        Everyone.IsName(name) ? [Everyone.Entry] : await Inner.FindGroupsByNameAsync(name, cancel);
 
     public Task<IReadOnlySet<string>> MemberGroupsAsync(string userId, CancellationToken cancel = default) =>
         Inner.MemberGroupsAsync(userId, cancel);

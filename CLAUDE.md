@@ -21,7 +21,7 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
   - the connection log;
   - the session limits.
 
-  A connection with no access grants is for administrators only.
+  A connection with no access grants is for administrators only. The group Everyone is built in (`People/Everyone.cs`): every signed-in user, whatever the sign-in method, and whether or not the directory answers.
 - **Sessions and sharing.**
   - **Idle retention.** A session outlives the browser for a few minutes.
   - **Unexpected ends.** If a session leaves the page without the user asking, a popup says why (`ended.ts`): sign-off, the IBM i or the server lost, sharing stopped, or ended from elsewhere.

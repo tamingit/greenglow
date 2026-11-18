@@ -174,8 +174,8 @@ public sealed partial class SignInSetup(
                         connection.Grants.Add(new ConnectionGrant
                         {
                             PrincipalType = PrincipalType.Group,
-                            PrincipalId = DatabaseDirectory.EveryoneId,
-                            DisplayName = DatabaseDirectory.EveryoneName,
+                            PrincipalId = Everyone.Id,
+                            DisplayName = Everyone.Name,
                         });
                         db.Connections.Add(connection);
                     }
