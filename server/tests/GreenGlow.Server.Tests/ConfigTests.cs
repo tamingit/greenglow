@@ -183,7 +183,6 @@ public class OriginPolicyTests
     [Theory]
     [InlineData("localhost:5080")]
     [InlineData("ftp://a.example.com")]
-    [InlineData("https://a.example.com/app")]
     [InlineData("https://a.example.com/?x=1")]
     [InlineData("https://user@a.example.com")]
     [InlineData("not a url")]
@@ -192,6 +191,18 @@ public class OriginPolicyTests
         Assert.Throws<ConfigException>(() => Policy(value));
         Assert.Throws<ConfigException>(() => Policy("https://ok.example.com", value));
     }
+
+    [Fact]
+    public void APublicUrlMayHaveABasePathAndOnlyItsOriginIsAllowed()
+    {
+        var p = Policy("https://a.example.com/app");
+        Assert.True(p.IsAllowed("https://a.example.com"));
+        Assert.Equal(["https://a.example.com"], p.Allowed);
+    }
+
+    [Fact]
+    public void AnExtraOriginMayNotHaveAPath() =>
+        Assert.Throws<ConfigException>(() => Policy("https://ok.example.com", "https://a.example.com/app"));
 
     [Theory]
     [InlineData(null)]

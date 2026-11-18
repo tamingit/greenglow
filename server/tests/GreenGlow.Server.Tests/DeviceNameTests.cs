@@ -122,6 +122,10 @@ public sealed class DeviceNameTests
         }
         await rig.DeleteAsync(opened.Id);
         await rig.WaitNoSessionsAsync();
+        // The list drops an ended session before its name is kept; advancing the clock in between
+        // would keep the name from the later time.
+        var sessions = factory.Services.GetRequiredService<SessionManager>();
+        await Wait.UntilAsync(() => !sessions.Holds(opened.Id), "the session to finish ending");
         clock.Advance(SessionManager.KeptForReconnect);
         Assert.Equal("GG1001", (await rig.OpenOkAsync(upn: "second@example.com")).Device);
     }
