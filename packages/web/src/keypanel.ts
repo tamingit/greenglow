@@ -25,7 +25,7 @@ const KEYS: PanelKey[] = [
   {
     name: 'EraseInput',
     label: 'Erase Input',
-    title: 'Erase Input: clears every input field (Alt+End)',
+    title: 'Erase Input: clears every input field (Shift+Backspace or Alt+End)',
   },
   { name: 'RollDown', label: 'Page Up', title: 'Page Up (Roll Down)' },
   { name: 'RollUp', label: 'Page Down', title: 'Page Down (Roll Up)' },
@@ -42,7 +42,7 @@ const OTHER_KEYS: PanelKey[] = [
   {
     name: 'EraseEof',
     label: 'Erase EOF',
-    title: 'Erase EOF: clears the field from the cursor (Ctrl+End)',
+    title: 'Erase EOF: clears the field from the cursor (Shift+Delete or Ctrl+End)',
   },
   { name: 'Reset', label: 'Reset', title: 'Reset (Left Ctrl)' },
   { name: 'Dup', label: 'Dup', title: 'Dup (Shift+Insert)' },

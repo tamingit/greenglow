@@ -28,6 +28,16 @@ describe('ACS key map', () => {
     expect(SOLO_MODIFIERS).toEqual({ ControlLeft: 'Reset', ControlRight: 'NewLine' });
   });
 
+  it('erases with Shift and the delete keys, as well as Ctrl+End and Alt+End', () => {
+    expect(press('Backspace', 'Backspace', { shiftKey: true })).toEqual(fn('EraseInput'));
+    expect(press('Delete', 'Delete', { shiftKey: true })).toEqual(fn('EraseEof'));
+    expect(press('End', 'End', { ctrlKey: true })).toEqual(fn('EraseEof'));
+    expect(press('End', 'End', { altKey: true })).toEqual(fn('EraseInput'));
+    // Without Shift they still delete.
+    expect(press('Backspace', 'Backspace')).toEqual(fn('Backspace'));
+    expect(press('Delete', 'Delete')).toEqual(fn('Delete'));
+  });
+
   it('maps function keys, Shift for F13 to F24, and the page keys to Roll', () => {
     expect(press('F3', 'F3')).toEqual(fn('F3'));
     expect(press('F12', 'F12', { shiftKey: true })).toEqual(fn('F24'));
