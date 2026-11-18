@@ -14,6 +14,9 @@ public sealed class GraphDirectory(HttpClient http, EntraOptions entra, TimeProv
     private const string Graph = "https://graph.microsoft.com/v1.0";
     private readonly SemaphoreSlim _tokenLock = new(1, 1);
     private string? _token;
+
+    /// <summary>The app registration the token is for: the settings can change while the server runs.</summary>
+    private string? _tokenFor;
     private DateTimeOffset _tokenExpires;
 
     public async Task<DirectoryEntry?> FindUserAsync(string upn, CancellationToken cancel = default)
@@ -127,7 +130,8 @@ public sealed class GraphDirectory(HttpClient http, EntraOptions entra, TimeProv
         await _tokenLock.WaitAsync(cancel);
         try
         {
-            if (_token is not null && clock.GetUtcNow() < _tokenExpires) return _token;
+            var app = $"{entra.TenantId}/{entra.ClientId}/{entra.ClientSecret.GetHashCode()}";
+            if (_token is not null && _tokenFor == app && clock.GetUtcNow() < _tokenExpires) return _token;
             using var response = await http.PostAsync(
                 $"https://login.microsoftonline.com/{Uri.EscapeDataString(entra.TenantId)}/oauth2/v2.0/token",
                 new FormUrlEncodedContent(new Dictionary<string, string>
@@ -140,6 +144,7 @@ public sealed class GraphDirectory(HttpClient http, EntraOptions entra, TimeProv
             await Ensure(response);
             var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancel);
             _token = body.GetProperty("access_token").GetString();
+            _tokenFor = app;
             _tokenExpires = clock.GetUtcNow().AddSeconds(body.GetProperty("expires_in").GetInt32() - 120);
             return _token!;
         }

@@ -54,6 +54,22 @@ public sealed class FakeIbmI : IAsyncDisposable
     private int _open;
     private int _nextId;
 
+    /// <summary>
+    /// When set, the fake takes automatic sign-on (RFC 4777 section 5): negotiation carries a
+    /// random seed, and a USER with a password substitute is checked against these accounts. A
+    /// right one skips the sign-on screen; a wrong one is refused (8937) and the connection
+    /// closed. Without accounts no seed is sent, so nothing can sign on that way.
+    /// </summary>
+    public FakeAccounts? Accounts { get; set; }
+
+    /// <summary>QRMTSIGN: false is *FRCSIGNON, where automatic sign-on isn't allowed (I906) and the sign-on screen follows.</summary>
+    public bool RemoteSignOn { get; set; } = true;
+
+    private int _autoSignOns;
+
+    /// <summary>Sessions signed on automatically so far.</summary>
+    public int AutoSignOns => Volatile.Read(ref _autoSignOns);
+
     private FakeIbmI(TcpListener listener, Action<string>? log)
     {
         _listener = listener;
@@ -206,8 +222,11 @@ public sealed class FakeIbmI : IAsyncDisposable
         string? device = null;
         var screen = Screen.SignOn;
         var buffer = new byte[4096];
+        var accounts = Accounts;
+        var serverSeed = accounts is null ? null : System.Security.Cryptography.RandomNumberGenerator.GetBytes(8);
+        Dictionary<string, byte[]> variables = [];
 
-        await stream.WriteAsync(Negotiation, _stop.Token);
+        await stream.WriteAsync(Negotiation(serverSeed), _stop.Token);
         while (true)
         {
             var count = await stream.ReadAsync(buffer, _stop.Token);
@@ -227,7 +246,10 @@ public sealed class FakeIbmI : IAsyncDisposable
                         break;
                     case TelnetEvent.Subnegotiation { Option: TelnetOption.NewEnviron } s when s.Data.Length > 0 && s.Data[0] == 0:
                         environment = true;
-                        requested = ParseDevName(s.Data) ?? requested;
+                        foreach (var (name, value) in ParseEnvironment(s.Data)) variables[name] = value;
+                        requested = variables.TryGetValue("DEVNAME", out var asked) && asked.Length > 0
+                            ? System.Text.Encoding.ASCII.GetString(asked)
+                            : requested;
                         break;
                     case TelnetEvent.Record r when started:
                         var (next, message) = HandleRecord(r.Data, screen);
@@ -264,6 +286,33 @@ public sealed class FakeIbmI : IAsyncDisposable
                     await stream.WriteAsync(StartupRecord("8902", collision), _stop.Token);
                     return null;
                 }
+                if (accounts is not null && variables.TryGetValue("USER", out var userBytes)
+                    && variables.TryGetValue("IBMSUBSPW", out var substitute) && variables.TryGetValue("IBMRSEED", out var clientSeed))
+                {
+                    var user = System.Text.Encoding.ASCII.GetString(userBytes);
+                    if (!RemoteSignOn)
+                    {
+                        Log($"#{id} automatic sign-on as {user} not allowed");
+                        await stream.WriteAsync(StartupRecord("I906", device!), _stop.Token);
+                        await stream.WriteAsync(Show(Screen.SignOn, null), _stop.Token);
+                        continue;
+                    }
+                    var level = accounts.PasswordLevel;
+                    var scheme = substitute.Length switch { 8 => (byte)0x01, 20 => (byte)0x03, _ => (byte)0x07 };
+                    var rc = clientSeed.Length == 8 ? accounts.Check(user, scheme, level, substitute, clientSeed, serverSeed!) : 0x00010004;
+                    if (rc != 0)
+                    {
+                        Log($"#{id} automatic sign-on as {user} refused ({rc:X8})");
+                        await stream.WriteAsync(StartupRecord("8937", device!), _stop.Token);
+                        return device;
+                    }
+                    Interlocked.Increment(ref _autoSignOns);
+                    Log($"#{id} session started on {device}, signed on as {user}");
+                    screen = Screen.Main;
+                    await stream.WriteAsync(StartupRecord("I902", device!), _stop.Token);
+                    await stream.WriteAsync(Show(Screen.Main, null), _stop.Token);
+                    continue;
+                }
                 Log($"#{id} session started on {device}");
                 await stream.WriteAsync(StartupRecord("I902", device!), _stop.Token);
                 await stream.WriteAsync(Show(Screen.SignOn, null), _stop.Token);
@@ -280,20 +329,17 @@ public sealed class FakeIbmI : IAsyncDisposable
         }
     }
 
-    /// <summary>The DEVNAME value of a NEW-ENVIRON IS reply, or null.</summary>
-    private static string? ParseDevName(byte[] data)
+    /// <summary>The variables of a NEW-ENVIRON IS reply (VAR and USERVAR alike), by name, with their values as sent.</summary>
+    private static Dictionary<string, byte[]> ParseEnvironment(byte[] data)
     {
+        var found = new Dictionary<string, byte[]>();
         var name = new List<byte>();
         var value = new List<byte>();
         var inValue = false;
         var haveVariable = false;
-        string? found = null;
         void Finish()
         {
-            if (haveVariable && System.Text.Encoding.ASCII.GetString([.. name]) == "DEVNAME")
-            {
-                found = System.Text.Encoding.ASCII.GetString([.. value]);
-            }
+            if (haveVariable) found[System.Text.Encoding.ASCII.GetString([.. name])] = [.. value];
             name.Clear();
             value.Clear();
             inValue = false;
@@ -321,7 +367,7 @@ public sealed class FakeIbmI : IAsyncDisposable
             }
         }
         Finish();
-        return string.IsNullOrEmpty(found) ? null : found;
+        return found;
     }
 
     /// <summary>
@@ -587,12 +633,18 @@ public sealed class FakeIbmI : IAsyncDisposable
         return Telnet.EncodeRecord([.. header, .. data]);
     }
 
-    /// <summary>The IBM i side of negotiation, as the real system sends it.</summary>
-    private static readonly byte[] Negotiation =
+    /// <summary>
+    /// The IBM i side of negotiation, as the real system sends it. With a seed, the SEND list
+    /// starts with USERVAR "IBMRSEED" and the seed (its bytes that look like NEW-ENVIRON codes
+    /// after an ESC), which is the offer of automatic sign-on.
+    /// </summary>
+    private static byte[] Negotiation(byte[]? seed) =>
     [
         .. Telnet.EncodeNegotiation(NegotiationCommand.Do, TelnetOption.NewEnviron),
         .. Telnet.EncodeNegotiation(NegotiationCommand.Do, TelnetOption.TerminalType),
-        .. Telnet.EncodeSubnegotiation(TelnetOption.NewEnviron, [1, 0, 3]),
+        .. Telnet.EncodeSubnegotiation(TelnetOption.NewEnviron, seed is null
+            ? [1, 0, 3]
+            : [1, 3, .. "IBMRSEED"u8, .. seed.SelectMany(b => b <= 3 ? new byte[] { 2, b } : [b]), 0, 3]),
         .. Telnet.EncodeSubnegotiation(TelnetOption.TerminalType, [1]),
         .. Telnet.EncodeNegotiation(NegotiationCommand.Do, TelnetOption.EndOfRecord),
         .. Telnet.EncodeNegotiation(NegotiationCommand.Will, TelnetOption.EndOfRecord),

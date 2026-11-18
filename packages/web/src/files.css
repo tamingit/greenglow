@@ -1,0 +1,149 @@
+/* The Files panel: the Printer panel's look (printer.css), plus saved logins, the two
+   checkboxes and the recent paths. */
+
+.files-logins {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.files-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.files-recent {
+  margin-top: 1rem;
+}
+
+.files-again {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.files-where {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.6rem 0 0.4rem;
+}
+
+.files-where .files-path {
+  flex: 1;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.files-tools {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.files-entries {
+  max-height: calc(100vh - 22rem);
+  overflow-y: auto;
+}
+
+.files-recent:empty {
+  display: none;
+}
+
+.files-upload-tools {
+  margin-bottom: 0.6rem;
+}
+
+.files-drop {
+  border: 2px dashed transparent;
+  border-radius: 6px;
+}
+
+.files-drop[data-over] {
+  border-color: var(--page-border);
+  background: var(--page-panel);
+}
+
+.files-uploads {
+  margin-top: 0.8rem;
+}
+
+.files-uploads:empty {
+  display: none;
+}
+
+.files-upload-list {
+  max-height: 12rem;
+  overflow-y: auto;
+}
+
+.files-upload {
+  display: flex;
+  flex-direction: column;
+  padding: 0.3rem 0.4rem;
+}
+
+.files-upload-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.files-upload[data-state='failed'] .printer-file-detail,
+.files-upload[data-state='exists'] .printer-file-detail {
+  color: var(--status-error);
+}
+
+.files-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.3rem;
+}
+
+.files-row .files-entry {
+  flex: 1;
+  min-width: 0;
+}
+
+.files-actions {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+}
+
+.files-action {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+.files-ask:empty {
+  display: none;
+}
+
+.files-ask-form {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+  padding: 0.6rem;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: var(--page-panel);
+}
+
+.files-ask-text {
+  margin: 0;
+}
+
+.files-danger {
+  border-color: var(--status-error);
+  color: var(--status-error);
+}
+
+.files-more {
+  font-style: italic;
+  text-align: center;
+}

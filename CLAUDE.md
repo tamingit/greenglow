@@ -29,7 +29,7 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
   - **Disconnected card.** It lists the user's open sessions to join, take over or end.
   - **Sharing.** An owner can share a session with named people, view-only or full access, and change or remove anyone's access at once. Shared people can view a session only while its owner is in it.
   - **Live updates.** The server pushes each page its user's session list over `/ws/user` (`UserFeed`, `userfeed.ts`). The page doesn't poll.
-- **Side panels.** They pull out from tabs on the window's right edge, one at a time (`side.css`): Keys (Alt+K), Share (Alt+S, `sharing.ts`), Macros (Alt+M) and Printer (Alt+P).
+- **Side panels.** They pull out from tabs on the window's right edge, one at a time (`side.css`): Keys (Alt+K), Share (Alt+S, `sharing.ts`), Macros (Alt+M), Printer (Alt+P) and Files (Alt+I, `files.ts`).
 - **Session tabs.** Each session has a tab in the top bar.
   - It is named after its screen's title, and coloured for its system.
   - A lock shows the link: green for verified TLS, yellow for TLS without a check, red for plain Telnet.
@@ -61,6 +61,7 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
 - **Printer output.** It is in `printer.ts` and `server/src/GreenGlow.Server/Printing/`.
   - The user signs on to the IBM i's Network Print server with their own IBM i user and password.
   - They see their own spooled files and open one as a PDF. The server renders SCS, passes PDFs through and refuses AFP.
+- **Files.** The Files panel browses the IFS's folders, downloads files, uploads files and folders, and makes, renames and deletes them (`files.ts`, `server/src/GreenGlow.Server/Files/`), through the IBM i's file server (`HostServers/FileServer.cs`; the port mapper first, 8473/9473 as the fallback). The user signs on with a saved login or their own IBM i user and password, as in the Printer panel. Uploads make missing folders, refuse a file that is there unless asked to replace it, and tag new files `Files__UploadCcsid` (1208); `Files__MaxUploadMegabytes` (2048) caps a file. Delete asks first, and again for a folder with things in it (deleted entry by entry: the IBM i deletes only empty folders). The server never renames or deletes `/` or a folder directly in it (`FileEndpoints.Protected`).
 - **Help.** The help page (`help.html`) holds the user guide. Only administrators can open the administrator guide (`/api/admin/guide`, from `server/src/GreenGlow.Server/Help/`). `npm run screenshots` takes the screenshots against the fake IBM i.
 - **Public demo.** Demo mode (`Demo__Enabled`) lets anyone sign in as a guest and use only demo systems: the fake IBM i, and PUB400 once it is enabled. See [Demo mode](#demo-mode).
 
@@ -192,6 +193,7 @@ Settings use ASP.NET Core names (`Section__Key`) from the environment, and in De
 | `Seed__ConnectionsFile`, `Seed__ConnectionsJson` | Connections added at start when the database doesn't have them; later changes are made on the admin page. In demo mode the seed is the whole configuration |
 | `Relay__CaFile`, `Relay__CaPem` | The CA for `tls://` connections, as a file or as PEM text. The text wins |
 | `Sessions__MaxFrontends` (2), `Sessions__IdleMinutes` (5), `Sessions__MaxConnections` (50) | Defaults for the limits. A value an administrator saves wins |
+| `Files__IdleMinutes` (15), `Files__UploadCcsid` (1208), `Files__MaxUploadMegabytes` (2048), `Files__PageSize` (2000) | The Files panel: how long an unused file server sign-on lasts, the CCSID a new file is tagged with (its bytes are never converted), the largest file one upload may send, and how many entries of a folder show at a time (the last row fetches the next page; e2e uses 100) |
 | `Printer__IdleMinutes` (15) | How long, in minutes, an unused printer output sign-on lasts. `Printer__Port` and `Printer__SecurePort` point at the fake IBM i in tests, and are ignored in Production |
 | `Dev__Groups` | Stand-in directory groups (members may be `*`). Not honoured in Production |
 | `Cluster__NodeId` (1) | This node's number, 1 to 9, used in its device names. Give every GreenGlow that reaches the same IBM i its own number. The pipeline gives production 1 and the test instance 8; e2e uses 7 (and 6 for its demo server); the demo compose file uses 5 |
@@ -331,7 +333,7 @@ Recordings and test screens:
     - are for test systems only, never production;
     - are never logged, recorded or written to disk by the tests;
     - are never committed.
-  - The IBM i password a user types in the Printer panel is used only to build the password substitute for the Network Print server, then dropped. It is never:
+  - The IBM i password a user types in the Printer or Files panel is used only to build the password substitute for the Network Print server or the file server, then dropped. It is never:
     - stored;
     - logged;
     - put in the database or the connection log;

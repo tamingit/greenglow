@@ -246,6 +246,12 @@
           aria-labelledby="printer-title"
           hidden
         ></aside>
+        <aside
+          id="files-panel"
+          class="printer-panel files-panel"
+          aria-labelledby="files-title"
+          hidden
+        ></aside>
       </div>
       <div class="side-tabs" aria-label="Side panels" role="group">
         <button
@@ -287,6 +293,16 @@
           title="Printer output (Alt+P)"
         >
           Printer
+        </button>
+        <button
+          type="button"
+          class="side-tab"
+          data-side="files"
+          aria-controls="files-panel"
+          aria-expanded="false"
+          title="Files from the IFS (Alt+I)"
+        >
+          Files
         </button>
       </div>
     </div>

@@ -6,12 +6,21 @@ using System.Text.RegularExpressions;
 using GreenGlow.Server.Configuration;
 using GreenGlow.Server.Relay;
 
-namespace GreenGlow.Server.Printing;
+namespace GreenGlow.Server.HostServers;
 
 /// <summary>One IBM i host server: its server ID and default ports (plain and TLS).</summary>
 public sealed record HostService(string Name, ushort ServerId, int Port, int SecurePort)
 {
     public static readonly HostService NetworkPrint = new("as-netprt", 0xE003, 8474, 9474);
+
+    /// <summary>The file server: the Integrated File System (IFS), by path.</summary>
+    public static readonly HostService FileServer = new("as-file", 0xE002, 8473, 9473);
+
+    /// <summary>The sign-on server: checks a user and password, and changes a password.</summary>
+    public static readonly HostService SignOn = new("as-signon", 0xE009, 8476, 9476);
+
+    /// <summary>The name the IBM i's port mapper knows it by: the TLS port has -s after it.</summary>
+    public string MapName(bool secure) => secure ? Name + "-s" : Name;
 
     /// <summary>Where this service is for a Telnet connection: the same host, TLS when the connection is.</summary>
     public Target EndpointFor(Target telnet) => telnet with { Port = telnet.Secure ? SecurePort : Port };
@@ -31,6 +40,10 @@ public enum SignOnFailure
     NoPassword,
     /// <summary>Any other refusal: the code is in the message.</summary>
     Refused,
+    /// <summary>A password change the IBM i refused because of the new password (its rules say why).</summary>
+    NewPasswordRefused,
+    /// <summary>The IBM i doesn't let this password be changed now.</summary>
+    ChangeNotAllowed,
     Unsupported,
     Unreachable,
     Protocol,
@@ -69,8 +82,11 @@ public sealed partial class HostServerClient : IAsyncDisposable
     private const ushort PasswordCodePoint = 0x1105;
     private const ushort UserIdCodePoint = 0x1104;
 
-    /// <summary>Client attributes in the seed request: the client can do SHA-1 password substitutes.</summary>
-    private const byte ShaCapable = 0x01;
+    /// <summary>
+    /// Client attributes in the seed request: the client can do SHA-512 password substitutes
+    /// (QPWDLVL 4) as well as SHA-1, as the Toolbox for Java says to every release.
+    /// </summary>
+    private const byte ShaCapable = 0x02;
 
     /// <summary>Client attributes in Start Server: the client takes job information back.</summary>
     private const byte JobInfo = 0x02;
@@ -97,7 +113,7 @@ public sealed partial class HostServerClient : IAsyncDisposable
     public int PasswordLevel { get; }
 
     [GeneratedRegex("^[A-Z@#$][A-Z0-9@#$_]{0,9}$")]
-    private static partial Regex UserPattern();
+    internal static partial Regex UserPattern();
 
     /// <summary>
     /// Connects to `endpoint` (from <see cref="HostService.EndpointFor"/>, with the Telnet
@@ -115,17 +131,7 @@ public sealed partial class HostServerClient : IAsyncDisposable
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         timeout.CancelAfter(SignOnTimeout);
-        TcpClient client;
-        Stream stream;
-        try
-        {
-            (client, stream) = await connector.ConnectAsync(endpoint, timeout.Token);
-        }
-        catch (Exception e) when (e is SocketException or IOException or AuthenticationException
-                                      || e is OperationCanceledException && !cancel.IsCancellationRequested)
-        {
-            throw new SignOnException(SignOnFailure.Unreachable, $"Couldn't reach the IBM i's {service.Name} server ({Describe(e)}).");
-        }
+        var (client, stream) = await OpenAsync(connector, endpoint, service, timeout.Token, cancel);
 
         try
         {
@@ -153,12 +159,34 @@ public sealed partial class HostServerClient : IAsyncDisposable
         {
             await stream.DisposeAsync();
             client.Dispose();
-            if (e is SignOnException) throw;
-            if (e is OperationCanceledException && cancel.IsCancellationRequested) throw;
-            if (e is IOException or SocketException or OperationCanceledException or EndOfStreamException)
-                throw new SignOnException(SignOnFailure.Unreachable, $"The IBM i's {service.Name} server closed the connection ({Describe(e)}).");
+            if (Lost(e, service, cancel) is { } lost) throw lost;
             throw;
         }
+    }
+
+    /// <summary>Connects to a host server, or says it couldn't be reached. `timeout` includes `cancel`.</summary>
+    internal static async Task<(TcpClient Client, Stream Stream)> OpenAsync(HostConnector connector, Target endpoint,
+        HostService service, CancellationToken timeout, CancellationToken cancel)
+    {
+        try
+        {
+            return await connector.ConnectAsync(endpoint, timeout);
+        }
+        catch (Exception e) when (e is SocketException or IOException or AuthenticationException
+                                      || e is OperationCanceledException && !cancel.IsCancellationRequested)
+        {
+            throw new SignOnException(SignOnFailure.Unreachable, $"Couldn't reach the IBM i's {service.Name} server ({Describe(e)}).");
+        }
+    }
+
+    /// <summary>A connection lost part-way, as a sign-on failure; null for anything else (rethrow it).</summary>
+    internal static SignOnException? Lost(Exception e, HostService service, CancellationToken cancel)
+    {
+        if (e is SignOnException) return null;
+        if (e is OperationCanceledException && cancel.IsCancellationRequested) return null;
+        return e is IOException or SocketException or OperationCanceledException or EndOfStreamException
+            ? new SignOnException(SignOnFailure.Unreachable, $"The IBM i's {service.Name} server closed the connection ({Describe(e)}).")
+            : null;
     }
 
     /// <summary>The next correlation ID for a request on this connection (never 0).</summary>
@@ -223,7 +251,7 @@ public sealed partial class HostServerClient : IAsyncDisposable
         return frame;
     }
 
-    private static void Expect(byte[] frame, ushort replyId, int minimum)
+    internal static void Expect(byte[] frame, ushort replyId, int minimum)
     {
         var id = BinaryPrimitives.ReadUInt16BigEndian(frame.AsSpan(18));
         if (id != replyId || frame.Length < minimum)
@@ -239,14 +267,28 @@ public sealed partial class HostServerClient : IAsyncDisposable
             "Wrong password. Each wrong password counts toward the profile being disabled.", rc),
         0x0003000C => new(SignOnFailure.WrongPasswordDisabled, "Wrong password, and the IBM i has now disabled the profile.", rc),
         0x0003000D => new(SignOnFailure.PasswordExpired,
-            "The password has expired. Change it at the IBM i sign-on screen, then try again.", rc),
+            "The password has expired. Choose a new one, then try again.", rc),
         0x00030010 => new(SignOnFailure.NoPassword, "That user profile has no password, so it can't sign on.", rc),
         0x00010007 => new(SignOnFailure.InvalidUser, "The IBM i says that user name isn't valid.", rc),
         0x00010008 => new(SignOnFailure.InvalidPassword, "The IBM i says the password isn't a valid length.", rc),
+        0x0001000D => new(SignOnFailure.NewPasswordRefused, "The IBM i says the new password isn't valid.", rc),
+        0x00030001 => new(SignOnFailure.NewPasswordRefused, "The new password is too long.", rc),
+        0x00030002 => new(SignOnFailure.NewPasswordRefused, "The new password is too short.", rc),
+        0x00030003 => new(SignOnFailure.NewPasswordRefused, "The new password repeats a character too often.", rc),
+        0x00030004 => new(SignOnFailure.NewPasswordRefused, "The new password has digits next to each other.", rc),
+        0x00030005 => new(SignOnFailure.NewPasswordRefused, "The new password has the same character twice in a row.", rc),
+        0x00030006 => new(SignOnFailure.NewPasswordRefused, "The new password was used before.", rc),
+        0x00030007 => new(SignOnFailure.NewPasswordRefused, "The new password needs at least one digit.", rc),
+        0x00030008 => new(SignOnFailure.NewPasswordRefused, "The new password has a character the IBM i doesn't allow.", rc),
+        0x00030009 => new(SignOnFailure.NewPasswordRefused, "The IBM i doesn't allow that new password.", rc),
+        0x0003000A => new(SignOnFailure.NewPasswordRefused, "The new password can't be the user name.", rc),
+        0x00030011 => new(SignOnFailure.NewPasswordRefused, "The IBM i's password validation program refused the new password.", rc),
+        0x00030012 => new(SignOnFailure.ChangeNotAllowed, "The IBM i doesn't allow this password to be changed yet.", rc),
+        0x00030013 => new(SignOnFailure.NewPasswordRefused, "The IBM i says the new password isn't valid.", rc),
         _ => new(SignOnFailure.Refused, $"The IBM i refused the sign-on (code {rc:X8}).", rc),
     };
 
-    private static string Describe(Exception e) => e switch
+    internal static string Describe(Exception e) => e switch
     {
         SocketException s => s.SocketErrorCode.ToString(),
         AuthenticationException => "TLS failed",

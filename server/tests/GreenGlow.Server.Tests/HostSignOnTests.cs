@@ -1,3 +1,4 @@
+using GreenGlow.Server.HostServers;
 using System.Net;
 using System.Net.Sockets;
 using GreenGlow.FakeHost;
@@ -30,6 +31,7 @@ public sealed class HostSignOnTests
     [InlineData(1)]
     [InlineData(2)]
     [InlineData(3)]
+    [InlineData(4)]
     public async Task SignsOnAtEveryPasswordLevel(int level)
     {
         await using var fake = await FakeNetworkPrint.StartAsync();

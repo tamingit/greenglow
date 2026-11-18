@@ -1,19 +1,22 @@
 # Local run of the deployable image: http://localhost:8080 (GREENGLOW_PORT in .env changes it)
 #   docker compose up --build
-# Needs .env (copy .env.example) and certs/ibmi-ca.pem for tls:// targets.
+# Works with no .env: sign-in is set up in the browser at first run (the setup link and token are
+# in the container log). Copy .env.example to .env for settings; certs/ibmi-ca.pem is for tls://
+# targets, and without it they are encrypted but unverified.
 services:
   greenglow:
     build:
       context: .
     image: greenglow-connect:dev
     init: true
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       # Paths and addresses inside the container; these override anything in .env.
       Relay__CaFile: /app/certs/ibmi-ca.pem
       Server__StaticDir: /app/wwwroot
       Data__DbPath: /app/data/greenglow.db
-      Seed__ConnectionsFile: /app/config/connections.json
       # The address people use: Server__PublicUrl from .env (https://… behind a TLS proxy), else
       # this machine.
       Server__PublicUrl: ${Server__PublicUrl:-http://localhost:${GREENGLOW_PORT:-8080}}

@@ -68,6 +68,7 @@ public sealed class HostSession : IAsyncDisposable
     private readonly List<Frontend> _frontends = [];
     private readonly CancellationTokenSource _stop = new();
     private readonly SignOnWatch _signOn = new();
+    private readonly AutoSignOn? _autoSignOn;
     private readonly ILogger _log;
     private readonly Func<CancellationToken, Task<(TcpClient, Stream)>> _connect;
     private TcpClient? _client;
@@ -90,8 +91,10 @@ public sealed class HostSession : IAsyncDisposable
         DateTimeOffset createdAt,
         Func<CancellationToken, Task<(TcpClient, Stream)>> connect,
         TimeProvider clock,
-        ILogger log)
+        ILogger log,
+        AutoSignOn? signOn = null)
     {
+        _autoSignOn = signOn;
         _clock = clock;
         Id = id;
         Owner = owner;
@@ -105,6 +108,7 @@ public sealed class HostSession : IAsyncDisposable
         {
             TerminalType = TerminalType,
             DeviceName = deviceName,
+            SignOn = signOn,
         });
     }
 
@@ -132,6 +136,12 @@ public sealed class HostSession : IAsyncDisposable
     public bool DeviceWasInUse { get; private set; }
 
     public bool SignedOn => _signOn.SignedOn;
+
+    /// <summary>The reason a session ends with when the IBM i refused its saved login's password.</summary>
+    public const string SignOnRefusedReason = "sign-on refused";
+
+    /// <summary>The IBM i refused the saved login this session tried to sign on with (8936, 8937).</summary>
+    public event Action<HostSession>? SignOnRefused;
 
     /// <summary>The browsers attached now.</summary>
     public int FrontendCount { get; private set; }
@@ -253,6 +263,24 @@ public sealed class HostSession : IAsyncDisposable
         }
         foreach (var e in result.Events)
         {
+            // A session that sent a saved login's password substitute is signed on by the time
+            // it starts, unless the IBM i doesn't allow that (I906: the sign-on screen follows)
+            // or refused the login, which ends it.
+            if (e is ConnectionEvent.Startup { Result: var started } && _autoSignOn is not null && _engine.AutoSignOnSent)
+            {
+                if (started.Code is "8936" or "8937")
+                {
+                    Broadcast(EventMessage(e));
+                    SignOnRefused?.Invoke(this);
+                    await EndAsync(SignOnRefusedReason);
+                    return;
+                }
+                if (started.Ok && started.Code != "I906")
+                {
+                    _signOn.SignedOnAs(_autoSignOn.User);
+                    FactsChanged?.Invoke(this);
+                }
+            }
             switch (e)
             {
                 case ConnectionEvent.Screen screen:

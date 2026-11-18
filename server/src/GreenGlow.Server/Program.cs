@@ -9,7 +9,10 @@ using GreenGlow.Server.Auth;
 using GreenGlow.Server.Cluster;
 using GreenGlow.Server.Configuration;
 using GreenGlow.Server.Data;
+using GreenGlow.Server.HostServers;
+using GreenGlow.Server.Logins;
 using GreenGlow.Server.People;
+using GreenGlow.Server.Files;
 using GreenGlow.Server.Printing;
 using GreenGlow.Server.Relay;
 using GreenGlow.Server.Sessions;
@@ -40,7 +43,8 @@ builder.Logging.AddJsonConsole(o => o.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fff
 var server = builder.Configuration.GetSection("Server").Get<ServerOptions>() ?? new ServerOptions();
 var relay = builder.Configuration.GetSection("Relay").Get<RelayOptions>() ?? new RelayOptions();
 var data = builder.Configuration.GetSection("Data").Get<DataOptions>() ?? new DataOptions();
-var seed = ConnectionSeed.Load(builder.Configuration.GetSection("Seed").Get<SeedOptions>() ?? new SeedOptions());
+var seedOptions = builder.Configuration.GetSection("Seed").Get<SeedOptions>() ?? new SeedOptions();
+var seed = ConnectionSeed.Load(seedOptions);
 var cluster = (builder.Configuration.GetSection("Cluster").Get<ClusterOptions>() ?? new ClusterOptions()).Validate();
 var demo = builder.Configuration.GetSection("Demo").Get<DemoOptions>() ?? new DemoOptions();
 builder.Services.AddSingleton(demo);
@@ -71,7 +75,7 @@ builder.Services.AddSingleton<SettingsStore>();
 builder.Services.AddSingleton<ConnectionLogger>();
 builder.Services.AddSingleton<TargetCatalog>();
 builder.Services.AddSingleton(HostConnector.Create(relay.CaFile, relay.CaPem));
-builder.Services.AddSingleton(new OriginPolicy(server));
+builder.Services.AddSingleton<OriginPolicy>();
 builder.Services.AddGreenGlowRateLimiter(
     builder.Configuration.GetSection("RateLimit").Get<RateLimitOptions>() ?? new RateLimitOptions(), demo);
 builder.Services.AddSingleton<SessionManager>();
@@ -82,7 +86,15 @@ builder.Services.AddSingleton<UserFeed>();
 var printer = builder.Configuration.GetSection("Printer").Get<PrinterOptions>() ?? new PrinterOptions();
 if (builder.Environment.IsProduction()) (printer.Port, printer.SecurePort) = (null, null);
 builder.Services.AddSingleton(printer);
+// The fake IBM i's ports, for tests: production always uses IBM's.
+var hostServers = builder.Environment.IsProduction()
+    ? new HostServerOptions()
+    : builder.Configuration.GetSection("HostServers").Get<HostServerOptions>() ?? new HostServerOptions();
+builder.Services.AddSingleton(hostServers);
+builder.Services.AddSingleton<HostEndpoints>();
 builder.Services.AddSingleton<PrintSessions>();
+builder.Services.AddSingleton(builder.Configuration.GetSection("Files").Get<FilesOptions>() ?? new FilesOptions());
+builder.Services.AddSingleton<FileSessions>();
 var entra = builder.Configuration.GetSection("Entra").Get<EntraOptions>() ?? new EntraOptions();
 var signIn = builder.AddGreenGlowAuth(entra, builder.Configuration.GetSection("Auth").Get<AuthOptions>() ?? new AuthOptions(), demo);
 if (demo.Enabled)
@@ -90,29 +102,45 @@ if (demo.Enabled)
     builder.Services.AddSingleton<GuestPruner>();
     builder.Services.AddHostedService(s => s.GetRequiredService<GuestPruner>());
 }
+// The Entra ID settings in force: the environment's, or the ones an administrator entered.
 builder.Services.AddSingleton(entra);
-// Who's who: Microsoft Graph with Entra ID; with the dev login, a stand-in over the database.
-if (entra.Configured)
-{
-    builder.Services.AddHttpClient<GraphDirectory>(http => http.Timeout = TimeSpan.FromSeconds(15));
-    builder.Services.AddSingleton<IDirectory>(s => s.GetRequiredService<GraphDirectory>());
-}
-else
-{
-    builder.Services.AddSingleton(builder.Configuration.GetSection("Dev").Get<DevOptions>() ?? new DevOptions());
-    builder.Services.AddSingleton<IDirectory, LocalDirectory>();
-}
+// Who's who, for the sign-in method in force: Microsoft Graph with Entra ID; with the dev
+// login, a stand-in; with local accounts or IBM i sign-in, the users in the database.
+builder.Services.AddHttpClient<GraphDirectory>(http => http.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddKeyedSingleton<IDirectory>(CurrentDirectory.Graph, (s, _) => s.GetRequiredService<GraphDirectory>());
+builder.Services.AddSingleton(builder.Configuration.GetSection("Dev").Get<DevOptions>() ?? new DevOptions());
+builder.Services.AddSingleton<LocalDirectory>();
+builder.Services.AddSingleton<DatabaseDirectory>();
+builder.Services.AddSingleton<IDirectory, CurrentDirectory>();
+// Saved IBM i logins: passwords in memory, and sealed in the database when remembered.
+builder.Services.AddSingleton(builder.Configuration.GetSection("Credentials").Get<CredentialOptions>() ?? new CredentialOptions());
+builder.Services.AddSingleton<CredentialSeal>();
+builder.Services.AddSingleton<CredentialVault>();
+builder.Services.AddSingleton<IbmLogins>();
+builder.Services.AddSingleton<AutoSignOns>();
+builder.Services.AddSingleton<PasswordLogin.Services>();
+builder.Services.AddSingleton(s => new SeedRunner(seed, s.GetRequiredService<IDbContextFactory<GreenGlowDb>>(),
+    s.GetRequiredService<IDirectory>(), s.GetRequiredService<TimeProvider>()));
 
 var app = builder.Build();
 var clock = app.Services.GetRequiredService<TimeProvider>();
+if (!string.IsNullOrWhiteSpace(seedOptions.ConnectionsFile) && !File.Exists(seedOptions.ConnectionsFile))
+    app.Logger.LogWarning("no seed file at {Path}; connections are managed on the admin page", seedOptions.ConnectionsFile);
 await DatabaseSetup.PrepareAsync(app.Services, clock, data);
 var settingsStore = app.Services.GetRequiredService<SettingsStore>();
+var signInConfig = app.Services.GetRequiredService<SignInConfig>();
+// A short Credentials__Key stops the start, not the first saved login.
+_ = app.Services.GetRequiredService<CredentialSeal>();
 app.Services.GetRequiredService<SyncStore>().Applied += tables =>
 {
-    if (tables.Contains("Settings")) settingsStore.Forget();
+    if (!tables.Contains("Settings")) return;
+    settingsStore.Forget();
+    // Another node's administrator may have changed how people sign in.
+    _ = signInConfig.ApplyAsync();
 };
 // Before seeding and before serving: take in what the other nodes have, sign-in keys included.
 await app.Services.GetRequiredService<SyncService>().JoinAsync();
+await signInConfig.ApplyAsync();
 await app.Services.GetRequiredService<UserStore>().PromoteInitialAdminAsync();
 await using (var db = await app.Services.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<GreenGlowDb>>().CreateDbContextAsync())
 {
@@ -124,16 +152,23 @@ await using (var db = await app.Services.GetRequiredService<Microsoft.EntityFram
             app.Logger.LogInformation("demo connections: added {Added}; changed {Updated}; removed {Removed}",
                 string.Join(", ", added), string.Join(", ", updated), string.Join(", ", removed));
     }
+    else if (signInConfig.Mode == SignInMode.Setup)
+    {
+        // Nobody to look access lists up with yet: the seed is applied when setup is done.
+        if (seed.Count > 0) app.Logger.LogInformation("{Count} seeded connections wait for first-run setup", seed.Count);
+    }
     else
     {
-        var added = await ConnectionSeed.ApplyAsync(db, seed, app.Services.GetRequiredService<IDirectory>(), clock);
+        var added = await app.Services.GetRequiredService<SeedRunner>().ApplyAsync();
         if (added.Count > 0) app.Logger.LogInformation("seeded connections {Connections}", string.Join(", ", added));
     }
 }
 
 var log = app.Services.GetRequiredService<ILogger<Program>>();
 // Missing Graph permissions show up now, not at the first search.
-if (app.Services.GetService<GraphDirectory>() is { } graph)
+if (signInConfig.Mode == SignInMode.Setup) app.AnnounceSetup(server);
+if (signInConfig.Mode == SignInMode.Entra
+    && app.Services.GetRequiredKeyedService<IDirectory>(CurrentDirectory.Graph) is GraphDirectory graph)
 {
     try
     {
@@ -184,6 +219,7 @@ app.UseCluster();
 app.UsePublicUrl(server);
 app.UseSecurityHeaders();
 app.UseWebSockets();
+app.UseSetupPage();
 app.UseBuiltApp(server.StaticDir);
 app.UseAuthentication();
 app.UseAuthorization();
@@ -208,6 +244,8 @@ api.MapGet("/me", (HttpContext context, SettingsStore settings) =>
             upn = user.Upn,
             name = user.Name,
             isAdmin = context.User.IsInRole(UserStore.AdminRole),
+            // How people sign in here: entra, local, ibmi, dev or guest.
+            method = PasswordLogin.Name(signInConfig.Mode),
             // Demo mode: a guest, with no sharing and no administration.
             demo = demo.Enabled,
             // What the page tells the user about leaving a session.
@@ -263,10 +301,12 @@ app.MapSessionEndpoints(api);
 app.Map("/ws/user", UserFeed.AttachAsync).RequireAuthorization();
 api.MapMacroEndpoints(sharing: !demo.Enabled);
 api.MapPrinterEndpoints();
+api.MapFileEndpoints();
 // Sharing, the directory and administration need real people: none of them in demo mode.
 if (!demo.Enabled)
 {
     api.MapShareEndpoints();
+    api.MapLoginEndpoints();
     api.MapAdminEndpoints();
     api.MapGuideEndpoints();
     api.MapDirectoryEndpoints();
@@ -275,6 +315,8 @@ app.Lifetime.ApplicationStopping.Register(() =>
     app.Services.GetRequiredService<SessionManager>().DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(10)));
 app.Lifetime.ApplicationStopping.Register(() =>
     app.Services.GetRequiredService<PrintSessions>().StopAsync().Wait(TimeSpan.FromSeconds(10)));
+app.Lifetime.ApplicationStopping.Register(() =>
+    app.Services.GetRequiredService<FileSessions>().StopAsync().Wait(TimeSpan.FromSeconds(10)));
 
 await app.RunAsync();
 return 0;

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using GreenGlow.Server.Configuration;
+using GreenGlow.Server.Data;
 using GreenGlow.Server.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -48,25 +49,27 @@ public static class Claims
     public const string Name = "name";
 }
 
-/// <summary>How people sign in: Entra ID, the dev login (Development and tests), or as demo guests.</summary>
-public enum SignInMode
-{
-    Entra,
-    Dev,
-    Guest,
-}
-
 public static class AuthSetup
 {
     public const string CallbackPath = "/auth/callback";
     public const string AdminPolicy = "admin";
     public const string SignedOutPath = "/auth/signed-out";
 
+    /// <summary>The sign-in page for local accounts, IBM i sign-in and the breakglass administrator, in the built web app.</summary>
+    public const string SignInPage = "/signin.html";
+
+    /// <summary>First-run setup, in the built web app.</summary>
+    public const string SetupPage = "/setup.html";
+
     /// <summary>
-    /// Cookie sign-in backed by Entra ID (OpenID Connect), by the dev login when allowed, or by
-    /// guest sign-in in demo mode. Demo mode is its own guard: it never relaxes the other two.
+    /// Cookie sign-in. What the environment fixes is decided here, once: demo mode (guests),
+    /// the dev login (Development and tests only, never with Entra ID), or Entra ID from
+    /// Entra__* variables. Demo mode is its own guard: it never relaxes the other two. With none
+    /// of them, the method is the one an administrator chose (<see cref="SignInConfig"/>): Entra
+    /// ID, local accounts or IBM i sign-in; until one is chosen the server only offers first-run
+    /// setup.
     /// </summary>
-    public static SignInMode AddGreenGlowAuth(this WebApplicationBuilder builder, EntraOptions entra, AuthOptions auth, DemoOptions demo)
+    public static SignInEnvironment AddGreenGlowAuth(this WebApplicationBuilder builder, EntraOptions entra, AuthOptions auth, DemoOptions demo)
     {
         var environment = builder.Environment;
         var devLogin = auth.DevLogin && !entra.Configured
@@ -83,11 +86,10 @@ public static class AuthSetup
             if (demo.GuestHours is < 1 or > 72) throw new ConfigException("Demo__GuestHours must be from 1 to 72.");
             if (demo.GuestsPerHour is < 1 or > 1000) throw new ConfigException("Demo__GuestsPerHour must be from 1 to 1000.");
         }
-        else if (!entra.Configured && !devLogin)
-            throw new ConfigException(
-                "Entra ID is not configured: set Entra__TenantId, Entra__ClientId and Entra__ClientSecret " +
-                "(or, in Development only, Auth__DevLogin=true).");
-        var mode = demo.Enabled ? SignInMode.Guest : devLogin ? SignInMode.Dev : SignInMode.Entra;
+        else if (entra.Configured && entra.ClientSecret.Length == 0)
+            throw new ConfigException("Entra ID is half configured: set Entra__ClientSecret as well as Entra__TenantId and Entra__ClientId.");
+        var fixedMode = demo.Enabled ? SignInMode.Guest : devLogin ? SignInMode.Dev : entra.Configured ? SignInMode.Entra : (SignInMode?)null;
+        var guest = fixedMode == SignInMode.Guest;
 
         // Unauthenticated API calls get 401 from the cookie scheme; only /auth/signin goes to Entra ID.
         var authentication = builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -98,20 +100,23 @@ public static class AuthSetup
             o.Cookie.SameSite = SameSiteMode.Lax;
             o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
             // A guest's sign-in ends a fixed time after it started; anyone else's after inactivity.
-            o.ExpireTimeSpan = TimeSpan.FromHours(mode == SignInMode.Guest ? demo.GuestHours : auth.SessionHours);
-            o.SlidingExpiration = mode != SignInMode.Guest;
+            o.ExpireTimeSpan = TimeSpan.FromHours(guest ? demo.GuestHours : auth.SessionHours);
+            o.SlidingExpiration = !guest;
             o.LoginPath = "/auth/signin";
             // The API and the WebSocket answer 401/403; only pages are sent to sign in.
             o.Events.OnRedirectToLogin = context => Deny(context, StatusCodes.Status401Unauthorized);
             o.Events.OnRedirectToAccessDenied = context => Deny(context, StatusCodes.Status403Forbidden);
             o.Events.OnValidatePrincipal = async context =>
             {
-                // A user removed since signing in loses access at once, and the administrator role
-                // comes from the database on every request, so granting or removing it applies at once.
+                // A user removed or switched off since signing in loses access at once, as does
+                // one whose kind of account the sign-in method no longer admits; and the
+                // administrator role comes from the database on every request, so granting or
+                // removing it applies at once.
                 var users = context.HttpContext.RequestServices.GetRequiredService<UserStore>();
+                var config = context.HttpContext.RequestServices.GetRequiredService<SignInConfig>();
                 var id = context.Principal?.FindFirstValue(Claims.ObjectId);
                 var user = id is null ? null : await users.FindAsync(id);
-                if (user is null)
+                if (user is null || user.Disabled || !config.Admits(user))
                 {
                     context.RejectPrincipal();
                     await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
@@ -122,77 +127,99 @@ public static class AuthSetup
             };
         });
 
-        if (entra.Configured)
+        // Entra ID's scheme is always registered, with whatever Entra ID settings are in force
+        // when it is used; SignInConfig takes the scheme away while Entra ID isn't the method.
+        authentication.AddOpenIdConnect(o =>
         {
-            authentication.AddOpenIdConnect(o =>
+            o.Authority = $"https://login.microsoftonline.com/{entra.TenantId}/v2.0";
+            o.ClientId = entra.ClientId;
+            o.ClientSecret = entra.ClientSecret;
+            o.ResponseType = OpenIdConnectResponseType.Code;
+            o.UsePkce = true;
+            o.CallbackPath = CallbackPath;
+            o.SignedOutCallbackPath = SignedOutPath;
+            o.SaveTokens = false;
+            o.GetClaimsFromUserInfoEndpoint = false;
+            o.MapInboundClaims = false;
+            o.Scope.Clear();
+            o.Scope.Add("openid");
+            o.Scope.Add("profile");
+            o.Scope.Add("email");
+            o.TokenValidationParameters.NameClaimType = "name";
+            o.Events.OnTokenValidated = async context =>
             {
-                o.Authority = $"https://login.microsoftonline.com/{entra.TenantId}/v2.0";
-                o.ClientId = entra.ClientId;
-                o.ClientSecret = entra.ClientSecret;
-                o.ResponseType = OpenIdConnectResponseType.Code;
-                o.UsePkce = true;
-                o.CallbackPath = CallbackPath;
-                o.SignedOutCallbackPath = SignedOutPath;
-                o.SaveTokens = false;
-                o.GetClaimsFromUserInfoEndpoint = false;
-                o.MapInboundClaims = false;
-                o.Scope.Clear();
-                o.Scope.Add("openid");
-                o.Scope.Add("profile");
-                o.Scope.Add("email");
-                o.TokenValidationParameters.NameClaimType = "name";
-                o.Events.OnTokenValidated = async context =>
+                var users = context.HttpContext.RequestServices.GetRequiredService<UserStore>();
+                var principal = context.Principal!;
+                var identity = await users.SignInAsync(
+                    principal.FindFirstValue("oid") ?? throw new InvalidOperationException("no oid claim"),
+                    principal.FindFirstValue("preferred_username") ?? principal.FindFirstValue("upn")
+                        ?? throw new InvalidOperationException("no UPN claim"),
+                    principal.FindFirstValue("name") ?? "",
+                    UserSource.Entra);
+                if (identity is null)
                 {
-                    var users = context.HttpContext.RequestServices.GetRequiredService<UserStore>();
-                    var principal = context.Principal!;
-                    var identity = await users.SignInAsync(
-                        principal.FindFirstValue("oid") ?? throw new InvalidOperationException("no oid claim"),
-                        principal.FindFirstValue("preferred_username") ?? principal.FindFirstValue("upn")
-                            ?? throw new InvalidOperationException("no UPN claim"),
-                        principal.FindFirstValue("name") ?? "");
-                    context.Principal = new ClaimsPrincipal(identity);
-                };
-            });
-        }
+                    context.Fail("That account is switched off.");
+                    return;
+                }
+                context.Principal = new ClaimsPrincipal(identity);
+            };
+        });
 
         builder.Services.AddAuthorizationBuilder()
             .AddPolicy(AdminPolicy, policy => policy.RequireRole(UserStore.AdminRole));
         builder.Services.AddSingleton(new AdminSeed(entra.InitialAdminUpn));
         builder.Services.AddSingleton<UserStore>();
-        return mode;
+        var signIn = new SignInEnvironment(fixedMode);
+        builder.Services.AddSingleton(signIn);
+        builder.Services.AddSingleton<SignInConfig>();
+        builder.Services.AddSingleton<SignInThrottle>();
+        builder.Services.AddSingleton<SignInSetup>();
+        builder.Services.AddSingleton(auth);
+        return signIn;
     }
 
-    public static void MapAuthEndpoints(this WebApplication app, SignInMode mode)
+    public static void MapAuthEndpoints(this WebApplication app, SignInEnvironment environment)
     {
-        var devLogin = mode == SignInMode.Dev;
         // Signing in: back to the page that asked, which must be on this site.
-        app.MapGet("/auth/signin", (string? returnUrl) =>
+        app.MapGet("/auth/signin", (string? returnUrl, SignInConfig config) =>
         {
             var target = SafeReturn(returnUrl);
-            return mode switch
+            return config.Mode switch
             {
+                SignInMode.Setup => Results.Redirect(SetupPage),
                 SignInMode.Dev => Results.Redirect($"/auth/dev?returnUrl={Uri.EscapeDataString(target)}"),
                 SignInMode.Guest => Results.Redirect($"{GuestLogin.Path}?returnUrl={Uri.EscapeDataString(target)}"),
-                _ => Results.Challenge(new AuthenticationProperties { RedirectUri = target },
+                SignInMode.Entra => Results.Challenge(new AuthenticationProperties { RedirectUri = target },
                     [OpenIdConnectDefaults.AuthenticationScheme]),
+                _ => Results.Redirect($"{SignInPage}?returnUrl={Uri.EscapeDataString(target)}"),
             };
         });
 
-        app.MapPost("/auth/signout", async (HttpContext context) =>
+        app.MapPost("/auth/signout", async (HttpContext context, SignInConfig config, Logins.CredentialVault vault) =>
         {
+            // The IBM i passwords held for this user on this node go with the sign-in.
+            if (CurrentUser.From(context.User) is { } user) vault.Forget(user.Id);
+            // The breakglass administrator and password sign-ins have nothing to sign out of elsewhere.
+            var entra = config.Mode == SignInMode.Entra
+                        && (await context.RequestServices.GetRequiredService<UserStore>()
+                            .FindAsync(context.User.FindFirstValue(Claims.ObjectId) ?? ""))?.Source == UserSource.Entra;
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return mode switch
+            return config.Mode switch
             {
-                SignInMode.Dev => Results.Redirect("/"),
                 SignInMode.Guest => Results.Redirect(GuestLogin.Path),
-                _ => Results.SignOut(new AuthenticationProperties { RedirectUri = "/" },
+                SignInMode.Entra when entra => Results.SignOut(new AuthenticationProperties { RedirectUri = "/" },
                     [OpenIdConnectDefaults.AuthenticationScheme]),
+                _ => Results.Redirect("/"),
             };
         }).RequireAuthorization();
 
-        if (mode == SignInMode.Guest) app.MapGuestLogin();
+        if (environment.Mode == SignInMode.Guest)
+        {
+            app.MapGuestLogin();
+            return;
+        }
 
-        if (devLogin)
+        if (environment.Mode == SignInMode.Dev)
         {
             app.Logger.LogWarning("Auth:DevLogin is on: anyone can sign in as any UPN. Never use this in production.");
             app.MapGet("/auth/dev", (string? returnUrl) => Results.Content(DevLoginPage(SafeReturn(returnUrl)), "text/html"));
@@ -205,7 +232,13 @@ public static class AuthSetup
                 await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
                 return Results.Redirect(SafeReturn(form["returnUrl"]));
             });
+            return;
         }
+
+        // Neither the dev login nor demo mode: passwords (local accounts, IBM i sign-in, the
+        // breakglass administrator) and first-run setup, each answering only when it applies.
+        app.MapPasswordLogin();
+        app.MapSetup();
     }
 
     private static readonly System.Text.RegularExpressions.Regex DevUpn =

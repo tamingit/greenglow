@@ -51,6 +51,7 @@ public static class AdminEndpoints
         admin.MapConnectionEndpoints();
         admin.MapLogEndpoints();
         admin.MapNodeEndpoints();
+        admin.MapSignInAdminEndpoints();
 
         admin.MapGet("/directory/groups", (string? q, IDirectory directory, ILogger<IDirectory> log) =>
                 Directory(log, async () => Results.Json(new { groups = await directory.SearchGroupsAsync(q ?? "") })))

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1d4d2c" />
+    <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192" />
+    <title>GreenGlow Connect setup</title>
+  </head>
+  <body class="admin setup">
+    <header class="app-bar">
+      <div class="bar-inner">
+        <span class="bar-brand">
+          <img class="bar-brand-mark" src="/icons/icon-192.png" alt="" width="32" height="32" />
+          <h1 class="bar-brand-name">GreenGlow Connect</h1>
+        </span>
+        <span class="admin-bar-title">First-run setup</span>
+        <a class="bar-btn" href="/help.html" target="_blank" rel="noopener">Help</a>
+      </div>
+    </header>
+    <main class="admin-main setup-main">
+      <h2 class="setup-title">Choose how people sign in</h2>
+      <p class="setup-intro">
+        The breakglass password is the way in if the sign-in method stops working, so keep it
+        somewhere safe. Nothing is saved until the whole form checks out.
+      </p>
+      <p id="setup-message" class="admin-message" role="status" hidden></p>
+      <form id="setup-form" class="setup-form" novalidate></form>
+    </main>
+    <script type="module" src="/src/setup/main.ts"></script>
+  </body>
+</html>

@@ -1,6 +1,7 @@
 using GreenGlow.Server.Auth;
 using GreenGlow.Server.Configuration;
 using GreenGlow.Server.Data;
+using GreenGlow.Server.Web;
 
 namespace GreenGlow.Server.Sessions;
 
@@ -17,7 +18,7 @@ public static class ShareEndpoints
     public static void MapShareEndpoints(this RouteGroupBuilder api)
     {
         api.MapPost("/sessions/{id:guid}/shares", async (Guid id, ShareRequest request, HttpContext context,
-            SessionManager sessions, Shares shares, ServerOptions server, Presence presence, UserFeed feed) =>
+            SessionManager sessions, Shares shares, SettingsStore settings, ServerOptions server, Presence presence, UserFeed feed) =>
         {
             var user = CurrentUser.From(context.User)!;
             var session = sessions.Find(id);
@@ -35,7 +36,7 @@ public static class ShareEndpoints
                 var share = await shares.CreateAsync(session, user, recipients);
                 // The people named see it in their lists at once.
                 feed.SessionChanged(session.Id, user.Id);
-                return Results.Json(Describe(share, server, session, presence), statusCode: StatusCodes.Status201Created);
+                return Results.Json(Describe(share, PublicAddress.Current(settings, server), session, presence), statusCode: StatusCodes.Status201Created);
             }
             catch (Shares.ShareException e)
             {
@@ -44,12 +45,12 @@ public static class ShareEndpoints
         });
 
         api.MapGet("/sessions/{id:guid}/shares", async (Guid id, HttpContext context, SessionManager sessions,
-            Shares shares, ServerOptions server, Presence presence) =>
+            Shares shares, SettingsStore settings, ServerOptions server, Presence presence) =>
         {
             var user = CurrentUser.From(context.User)!;
             var session = sessions.Find(id);
             if (session is null || session.Owner.Id != user.Id) return Results.NotFound();
-            return Results.Json(new { shares = (await shares.ForSessionAsync(id)).Select(s => Describe(s, server, session, presence)) });
+            return Results.Json(new { shares = (await shares.ForSessionAsync(id)).Select(s => Describe(s, PublicAddress.Current(settings, server), session, presence)) });
         });
 
         // Who a session is shared with, for anyone in it: its owner and the people named on its
@@ -192,7 +193,7 @@ public static class ShareEndpoints
     /// A share for its owner: each person, their access, whether they're watching now, whether
     /// they have the keyboard, and whether they have GreenGlow open at all.
     /// </summary>
-    private static object Describe(SessionShare share, ServerOptions server, HostSession session, Presence presence)
+    private static object Describe(SessionShare share, string baseUrl, HostSession session, Presence presence)
     {
         var attached = session.Attached;
         var keyboard = session.KeyboardHolder;
@@ -200,7 +201,7 @@ public static class ShareEndpoints
         {
             id = share.Id,
             createdAt = share.CreatedAt,
-            url = $"{server.PublicUrl.TrimEnd('/')}/?share={Uri.EscapeDataString(share.Token)}",
+            url = $"{baseUrl.TrimEnd('/')}/?share={Uri.EscapeDataString(share.Token)}",
             recipients = share.Recipients.OrderBy(r => r.Upn).Select(r => new
             {
                 id = r.Id,
