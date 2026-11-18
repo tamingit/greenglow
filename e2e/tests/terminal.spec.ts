@@ -262,14 +262,17 @@ test.describe('terminal', () => {
     page,
   }) => {
     await signIn(page, 'terminal.erase@example.com');
+    // A retry starts clean: the page would join the session an earlier try left running.
+    await endSessions(page);
+    await page.goto('/');
     await connect(page, 'Fake IBM i');
     await expectScreen(page, /Sign On/);
     const start = await page.locator('#terminal .status').textContent();
     await type(page, 'QZXJWK');
     for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowLeft');
     await page.keyboard.press('Shift+Delete');
-    await expect.poll(() => screenText(page)).toContain('QZX');
-    expect(await screenText(page)).not.toContain('QZXJ');
+    // Wait for the erase itself: "QZX" alone would match before the key reaches the server.
+    await expect.poll(() => screenText(page)).toMatch(/QZX(?!J)/);
     await page.keyboard.press('Shift+Backspace');
     await expect.poll(() => screenText(page)).not.toContain('QZX');
     // Erase Input puts the cursor back at the start of the first input field.
