@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using GreenGlow.Server.Macros;
 using GreenGlow.Server.Admin;
 using GreenGlow.Server.Auth;
+using GreenGlow.Server.Branding;
 using GreenGlow.Server.Cluster;
 using GreenGlow.Server.Configuration;
 using GreenGlow.Server.Data;
@@ -72,6 +73,7 @@ builder.Services.AddDataProtection().SetApplicationName("greenglow-connect");
 builder.Services.AddSingleton<IConfigureOptions<KeyManagementOptions>>(s => new ConfigureOptions<KeyManagementOptions>(o =>
     o.XmlRepository = new DbKeyRepository(s.GetRequiredService<IDbContextFactory<GreenGlowDb>>())));
 builder.Services.AddSingleton<SettingsStore>();
+builder.Services.AddSingleton<BrandStore>();
 builder.Services.AddSingleton<ConnectionLogger>();
 builder.Services.AddSingleton<TargetCatalog>();
 builder.Services.AddSingleton(HostConnector.Create(relay.CaFile, relay.CaPem));
@@ -208,8 +210,10 @@ if (server.TrustForwardedHeaders)
 {
     var forwarded = new ForwardedHeadersOptions
     {
+        // X-Forwarded-Prefix: a proxy that strips the base path says what it was.
         ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
-            | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto,
+            | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto
+            | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedPrefix,
         ForwardLimit = 1,
     };
     // The proxy's address isn't known in advance; only it can reach the server.
@@ -217,12 +221,18 @@ if (server.TrustForwardedHeaders)
     forwarded.KnownProxies.Clear();
     app.UseForwardedHeaders(forwarded);
 }
+// Under a base path (Server__PublicUrl with a path), requests to it are handled as from the root.
+app.UseBasePath();
+// Routing after the base path is taken off: left implicit, it would run first and match none of
+// the paths under it.
+app.UseRouting();
 // The peer API first: other nodes, sealed, never through the browser's address.
 app.UseCluster();
-app.UsePublicUrl(server);
+app.UsePublicUrl();
 app.UseSecurityHeaders();
 app.UseWebSockets();
 app.UseSetupPage();
+app.UseBrandedPages(server.StaticDir);
 app.UseBuiltApp(server.StaticDir);
 app.UseAuthentication();
 app.UseAuthorization();
@@ -232,6 +242,7 @@ app.UseOriginCheck();
 app.MapAuthEndpoints(signIn);
 
 app.MapGet("/healthz", () => Results.Text("ok\n"));
+app.MapBrandingFiles();
 // Names and labels only: the browser never learns or chooses a host.
 var api = app.MapGroup("/api").RequireAuthorization();
 api.AddEndpointFilter(async (context, next) =>

@@ -17,7 +17,11 @@ public sealed class OriginPolicy
     public OriginPolicy(ServerOptions options, SettingsStore? settings = null)
     {
         _settings = settings;
-        _allowed = new HashSet<string>(StringComparer.Ordinal) { OriginOf(options.PublicUrl, "Server:PublicUrl") };
+        // The public URL may carry a base path; only its origin is what a browser sends.
+        var publicUrl = PublicAddress.Parse(options.PublicUrl)
+            ?? throw new ConfigException(
+                $"Server:PublicUrl \"{options.PublicUrl}\" must be an address such as http://localhost:5080 or https://example.com/greenglow");
+        _allowed = new HashSet<string>(StringComparer.Ordinal) { PublicAddress.Origin(publicUrl) };
         foreach (var origin in options.AllowedOrigins.Where(o => !string.IsNullOrWhiteSpace(o)))
             _allowed.Add(OriginOf(origin.Trim(), "Server:AllowedOrigins"));
     }
@@ -27,7 +31,8 @@ public sealed class OriginPolicy
     /// <summary>The configured origins, and the one setup saved (which may be changed by an administrator later).</summary>
     public bool IsAllowed(string? origin) =>
         !string.IsNullOrEmpty(origin)
-        && (_allowed.Contains(origin) || PublicAddress.Parse(_settings?.Text(PublicAddress.Setting)) == origin);
+        && (_allowed.Contains(origin)
+            || (PublicAddress.Parse(_settings?.Text(PublicAddress.Setting)) is { } saved && PublicAddress.Origin(saved) == origin));
 
     private static string OriginOf(string value, string setting)
     {

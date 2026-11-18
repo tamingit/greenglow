@@ -42,5 +42,9 @@ export function notify(text: string, error = false): void {
   message.textContent = text;
   message.dataset.error = String(error);
   message.hidden = false;
-  if (!error) setTimeout(() => (message.hidden = message.textContent !== text), 4000);
+  // Only this message fades: a later one (an error above all) stays.
+  if (!error)
+    setTimeout(() => {
+      if (message.textContent === text) message.hidden = true;
+    }, 4000);
 }

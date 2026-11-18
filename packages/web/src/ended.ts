@@ -3,6 +3,8 @@
 // ConnectionReset`, `server shutting down`, a sentence for a share); a socket that dropped
 // without one is a lost connection to the server.
 
+import { brandShortName } from './brand.ts';
+
 export interface Ended {
   /** A few words, for the alert's title and the status line. */
   title: string;
@@ -38,14 +40,14 @@ export function describeEnd(code: number, reason: string, label: string): Ended 
     };
   if (reason === 'server shutting down')
     return {
-      title: 'GreenGlow restarted',
-      message: `The GreenGlow server stopped, which ended the session on ${label}. Connect again in a moment.`,
+      title: `${brandShortName()} restarted`,
+      message: `The ${brandShortName()} server stopped, which ended the session on ${label}. Connect again in a moment.`,
       error: true,
     };
   if (reason === 'server error')
     return {
-      title: 'GreenGlow error',
-      message: `Something went wrong on the GreenGlow server, which ended the session on ${label}.`,
+      title: `${brandShortName()} error`,
+      message: `Something went wrong on the ${brandShortName()} server, which ended the session on ${label}.`,
       error: true,
     };
   if (reason === 'ended by the user')
@@ -75,9 +77,9 @@ export function describeEnd(code: number, reason: string, label: string): Ended 
       error: false,
     };
   return {
-    title: 'Connection to GreenGlow lost',
+    title: `Connection to ${brandShortName()} lost`,
     message:
-      `This page lost its connection to the GreenGlow server (${code}${reason ? `: ${reason}` : ''}). ` +
+      `This page lost its connection to the ${brandShortName()} server (${code}${reason ? `: ${reason}` : ''}). ` +
       'Connect again, or join the session again from the list if it is still open.',
     error: true,
   };

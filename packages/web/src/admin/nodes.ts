@@ -4,6 +4,7 @@
 
 import { ApiError, api } from './api.ts';
 import { button, h, notify, when } from './dom.ts';
+import { brandShortName } from '../brand.ts';
 
 interface NodeSession {
   id: string;
@@ -118,7 +119,7 @@ export function nodesPanel(): { element: HTMLElement; load(): Promise<void> } {
               'Resume',
               () =>
                 void act(
-                  `/api/admin/nodes/${node.id}/drain`,
+                  `api/admin/nodes/${node.id}/drain`,
                   { drain: false },
                   `${name} is taking sessions again.`,
                 ),
@@ -130,7 +131,7 @@ export function nodesPanel(): { element: HTMLElement; load(): Promise<void> } {
                 )
               )
                 void act(
-                  `/api/admin/nodes/${node.id}/drain`,
+                  `api/admin/nodes/${node.id}/drain`,
                   { drain: true },
                   `${name} is draining.`,
                 );
@@ -146,7 +147,7 @@ export function nodesPanel(): { element: HTMLElement; load(): Promise<void> } {
                   `Resync ${name} from scratch? Its connections, users, shares, macros and settings are replaced by the other nodes' copies. Changes it made that no other node has yet are lost.`,
                 )
               )
-                void act(`/api/admin/nodes/${node.id}/resync`, undefined, `${name} was resynced.`);
+                void act(`api/admin/nodes/${node.id}/resync`, undefined, `${name} was resynced.`);
             },
             'admin-btn admin-btn-quiet',
           ),
@@ -172,7 +173,7 @@ export function nodesPanel(): { element: HTMLElement; load(): Promise<void> } {
   async function load(): Promise<void> {
     const { nodes, clustered } = await api<{ nodes: Node[]; clustered: boolean }>(
       'GET',
-      '/api/admin/nodes',
+      'api/admin/nodes',
     );
     list.replaceChildren(...nodes.map((node) => card(node, clustered)));
   }
@@ -182,7 +183,7 @@ export function nodesPanel(): { element: HTMLElement; load(): Promise<void> } {
     { class: 'admin-panel' },
     h('p', {
       class: 'admin-intro',
-      text: 'Each GreenGlow server and its sessions. Before restarting a server, drain it: it opens no new sessions, and the ones it has carry on until they end.',
+      text: `Each ${brandShortName()} server and its sessions. Before restarting a server, drain it: it opens no new sessions, and the ones it has carry on until they end.`,
     }),
     h(
       'div',

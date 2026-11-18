@@ -3,6 +3,12 @@ import { defineConfig } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+/** An address from the root of the server, which misses the app's base path. */
+const APP_PATH =
+  '/^\\/(api|ws|auth|branding|icons|help|brand|manifest\\.webmanifest|[a-z]+\\.html)([/?#]|$)/';
+const APP_PATH_MESSAGE =
+  "Make the address relative to the page ('api/me', not '/api/me'): the app may be under a base path. See src/urls.ts.";
+
 export default defineConfig(
   { ignores: ['**/dist/', '**/node_modules/', 'test/recordings/', 'test-results/'] },
   js.configs.recommended,
@@ -52,6 +58,16 @@ export default defineConfig(
         {
           selector: "MemberExpression[property.name='cssText']",
           message: 'Set a custom property with style.setProperty, so the look stays in CSS.',
+        },
+        // The app may be under a base path (https://example.com/greenglow/), and every page is at
+        // it: addresses are relative to the page ('api/me'), so the browser adds the base.
+        {
+          selector: `Literal[value=${APP_PATH}]`,
+          message: APP_PATH_MESSAGE,
+        },
+        {
+          selector: `TemplateLiteral > TemplateElement:first-child[value.raw=${APP_PATH}]`,
+          message: APP_PATH_MESSAGE,
         },
       ],
     },

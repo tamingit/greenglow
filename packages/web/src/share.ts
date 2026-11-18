@@ -31,7 +31,7 @@ interface Share {
 }
 
 function sharesPath(sessionId: string): string {
-  return `/api/sessions/${encodeURIComponent(sessionId)}/shares`;
+  return `api/sessions/${encodeURIComponent(sessionId)}/shares`;
 }
 
 /** How many people one of the user's sessions is shared with now. */
@@ -251,7 +251,7 @@ export function openShareDialog(sessionId: string, label: string, closed?: () =>
         (
           await api<{ users: DirectoryEntry[] }>(
             'GET',
-            `/api/directory/users?q=${encodeURIComponent(q)}`,
+            `api/directory/users?q=${encodeURIComponent(q)}`,
           )
         ).users,
       pick: (entry) => {

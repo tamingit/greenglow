@@ -22,7 +22,7 @@ export async function api<T>(method: string, path: string, body?: unknown): Prom
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (response.status === 401) {
-    location.assign(`/auth/signin?returnUrl=${encodeURIComponent(location.pathname)}`);
+    location.assign(`auth/signin?returnUrl=${encodeURIComponent(location.pathname)}`);
     throw new ApiError(401, 'Signing in…');
   }
   if (!response.ok) {

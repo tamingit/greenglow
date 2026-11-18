@@ -202,6 +202,16 @@ body.admin {
   cursor: default;
 }
 
+.admin-brand-icon {
+  width: 4rem;
+  height: 4rem;
+  padding: 0.25rem;
+  border: 1px solid var(--page-border);
+  border-radius: 8px;
+  background: var(--bar-bg);
+  object-fit: contain;
+}
+
 .admin-swatch {
   display: inline-block;
   width: 0.8rem;

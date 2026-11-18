@@ -164,7 +164,7 @@ export function connectionsPanel(): { element: HTMLElement; load(): Promise<void
     const { connections, certificatesVerified } = await api<{
       connections: Connection[];
       certificatesVerified: boolean;
-    }>('GET', '/api/admin/connections');
+    }>('GET', 'api/admin/connections');
     serverCa = certificatesVerified;
     list.replaceChildren(...connections.map(card), addCard());
   }
@@ -193,7 +193,7 @@ export function connectionsPanel(): { element: HTMLElement; load(): Promise<void
             '×',
             () =>
               void run(
-                () => api('DELETE', `/api/admin/connections/${connection.id}/grants/${grant.id}`),
+                () => api('DELETE', `api/admin/connections/${connection.id}/grants/${grant.id}`),
                 `${grant.name} can no longer use ${connection.label}.`,
               ),
             'admin-chip-remove',
@@ -206,7 +206,7 @@ export function connectionsPanel(): { element: HTMLElement; load(): Promise<void
     const grant = (type: 'user' | 'group') => (entry: DirectoryEntry) =>
       void run(
         () =>
-          api('POST', `/api/admin/connections/${connection.id}/grants`, {
+          api('POST', `api/admin/connections/${connection.id}/grants`, {
             type,
             id: entry.id,
             name: entry.upn ?? entry.name,
@@ -255,7 +255,7 @@ export function connectionsPanel(): { element: HTMLElement; load(): Promise<void
           'Save',
           () =>
             void run(
-              () => api('PUT', `/api/admin/connections/${connection.id}`, form.read()),
+              () => api('PUT', `api/admin/connections/${connection.id}`, form.read()),
               `Saved ${connection.label}.`,
             ),
         ),
@@ -267,7 +267,7 @@ export function connectionsPanel(): { element: HTMLElement; load(): Promise<void
             )
               return;
             void run(
-              () => api('DELETE', `/api/admin/connections/${connection.id}`),
+              () => api('DELETE', `api/admin/connections/${connection.id}`),
               `Deleted ${connection.label}.`,
             );
           },
@@ -289,7 +289,7 @@ export function connectionsPanel(): { element: HTMLElement; load(): Promise<void
             (
               await api<{ groups: DirectoryEntry[] }>(
                 'GET',
-                `/api/admin/directory/groups?q=${encodeURIComponent(q)}`,
+                `api/admin/directory/groups?q=${encodeURIComponent(q)}`,
               )
             ).groups,
           pick: grant('group'),
@@ -301,7 +301,7 @@ export function connectionsPanel(): { element: HTMLElement; load(): Promise<void
             (
               await api<{ users: DirectoryEntry[] }>(
                 'GET',
-                `/api/directory/users?q=${encodeURIComponent(q)}`,
+                `api/directory/users?q=${encodeURIComponent(q)}`,
               )
             ).users,
           pick: grant('user'),
@@ -344,7 +344,7 @@ export function connectionsPanel(): { element: HTMLElement; load(): Promise<void
         button('Add connection', () => {
           const values = form.read();
           void run(
-            () => api('POST', '/api/admin/connections', { name: name.value.trim(), ...values }),
+            () => api('POST', 'api/admin/connections', { name: name.value.trim(), ...values }),
             `Added ${values.label || name.value.trim()}.`,
           );
         }),
@@ -393,7 +393,7 @@ export function settingsPanel(): { element: HTMLElement; load(): Promise<void> }
   const list = h('div', { class: 'admin-panel' });
 
   async function load(): Promise<void> {
-    const { settings } = await api<{ settings: Setting[] }>('GET', '/api/admin/settings');
+    const { settings } = await api<{ settings: Setting[] }>('GET', 'api/admin/settings');
     list.replaceChildren(
       ...settings.map((setting) => {
         const [title, help] = SETTING_TEXT[setting.key] ?? [setting.key, ''];
@@ -408,7 +408,7 @@ export function settingsPanel(): { element: HTMLElement; load(): Promise<void> }
         });
         const save = async (value: number | null, done: string) => {
           try {
-            await api('PUT', `/api/admin/settings/${encodeURIComponent(setting.key)}`, { value });
+            await api('PUT', `api/admin/settings/${encodeURIComponent(setting.key)}`, { value });
             notify(done);
             await load();
           } catch (error) {

@@ -48,6 +48,7 @@ import './night-shift.css';
 import './offline.css';
 import './tabs.css';
 import './side.css';
+import { brandShortName } from './brand.ts';
 
 interface TargetInfo {
   name: string;
@@ -347,7 +348,7 @@ function showColor(target: TargetInfo | undefined): void {
 async function saveColor(color: string | null): Promise<void> {
   const target = targets.get(active.target);
   if (!target) return;
-  const response = await fetch(`/api/targets/${encodeURIComponent(target.name)}/color`, {
+  const response = await fetch(`api/targets/${encodeURIComponent(target.name)}/color`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ color }),
@@ -699,16 +700,16 @@ function alertEnded(end: Ended): void {
 /** Sends a signed-out visitor to sign in, then back to this page. */
 function signIn(): never {
   location.assign(
-    `/auth/signin?returnUrl=${encodeURIComponent(location.pathname + location.search)}`,
+    `auth/signin?returnUrl=${encodeURIComponent(location.pathname + location.search)}`,
   );
   throw new Error('Signing in');
 }
 
 /** The signed-in user, shown in the menu. */
 async function loadUser(): Promise<void> {
-  const response = await fetch('/api/me');
+  const response = await fetch('api/me');
   if (response.status === 401) signIn();
-  if (!response.ok) throw new Error(`/api/me returned ${response.status}`);
+  if (!response.ok) throw new Error(`api/me returned ${response.status}`);
   const me = (await response.json()) as {
     upn: string;
     name: string;
@@ -736,9 +737,9 @@ async function loadUser(): Promise<void> {
 }
 
 async function loadTargets(): Promise<void> {
-  const response = await fetch('/api/targets');
+  const response = await fetch('api/targets');
   if (response.status === 401) signIn();
-  if (!response.ok) throw new Error(`/api/targets returned ${response.status}`);
+  if (!response.ok) throw new Error(`api/targets returned ${response.status}`);
   const list = (await response.json()) as { targets: TargetInfo[] };
   for (const target of list.targets) {
     targets.set(target.name, target);
@@ -978,8 +979,8 @@ const invites = new Invites(joinShared);
 
 /** The user's own sessions and those shared with them, as the server holds them now. */
 async function listSessions(): Promise<SessionInfo[]> {
-  const response = await fetch('/api/sessions');
-  if (!response.ok) throw new Error(`/api/sessions returned ${response.status}`);
+  const response = await fetch('api/sessions');
+  if (!response.ok) throw new Error(`api/sessions returned ${response.status}`);
   return ((await response.json()) as { sessions: SessionInfo[] }).sessions;
 }
 
@@ -1012,7 +1013,7 @@ function showLobby(): void {
       takeOver: (info) => join(info, active, true),
       joinAll,
       end: (info) =>
-        void fetch(`/api/sessions/${encodeURIComponent(info.id)}`, { method: 'DELETE' }),
+        void fetch(`api/sessions/${encodeURIComponent(info.id)}`, { method: 'DELETE' }),
     },
   );
 }
@@ -1171,7 +1172,7 @@ async function playById(info: { id: string; name: string }): Promise<void> {
   if (!mayType()) return;
   let macro;
   try {
-    const { content } = await api<{ content: string }>('GET', `/api/macros/${info.id}`);
+    const { content } = await api<{ content: string }>('GET', `api/macros/${info.id}`);
     macro = parseHodMacro(content);
   } catch (error) {
     macros.say((error as Error).message);
@@ -1242,7 +1243,7 @@ async function playById(info: { id: string; name: string }): Promise<void> {
     playing = undefined;
   }
   const skipped = result.skipped.length
-    ? ` It skipped what GreenGlow doesn’t play yet: ${result.skipped.join(', ')}.`
+    ? ` It skipped what ${brandShortName()} doesn’t play yet: ${result.skipped.join(', ')}.`
     : '';
   if (result.done) setStatus(`Played ${info.name}.${skipped}`, 'ok', tab);
   else setStatus(`Stopped ${info.name}: ${result.stopped}.${skipped}`, 'warn', tab);
@@ -1283,7 +1284,7 @@ async function stopRecording(): Promise<void> {
   const { recorder, tab } = recording;
   const macro = recorder.finish(tab.session?.screen);
   try {
-    await api('POST', '/api/macros', { name: recorder.name, content: writeHodMacro(macro) });
+    await api('POST', 'api/macros', { name: recorder.name, content: writeHodMacro(macro) });
     endRecording(`Saved the macro ${recorder.name}: ${macro.screens.length} screens.`);
   } catch (error) {
     // Kept recording, so nothing is lost: another name can be tried by stopping again later.
@@ -1785,7 +1786,7 @@ async function endSession(tab: Tab): Promise<void> {
   const id = tab.session?.id;
   tab.session?.close();
   if (id === undefined) return;
-  const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const response = await fetch(`api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!response.ok && response.status !== 404)
     logLine(`Ending the session failed: ${response.status}`, tab);
 }
@@ -2153,7 +2154,7 @@ async function openShareLink(): Promise<void> {
   const token = new URLSearchParams(location.search).get('share');
   if (!token || demo) return;
   history.replaceState(null, '', location.pathname);
-  const response = await fetch(`/api/shares/${encodeURIComponent(token)}`);
+  const response = await fetch(`api/shares/${encodeURIComponent(token)}`);
   if (!response.ok) {
     const { message } = (await response.json().catch(() => ({}))) as { message?: string };
     setStatus(message ?? 'This share link can’t be opened.', 'warn');

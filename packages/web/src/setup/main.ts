@@ -7,6 +7,8 @@ import '../admin/admin.css';
 import './setup.css';
 import { ApiError, api } from '../admin/api.ts';
 import { h } from '../admin/dom.ts';
+import { brandName, brandShortName } from '../brand.ts';
+import { basePath } from '../urls.ts';
 
 type Method = 'entra' | 'local' | 'ibmi';
 
@@ -163,7 +165,11 @@ const methods = h(
   ),
 );
 
-const publicUrl = input('publicUrl', 'text', { required: true, value: location.origin });
+// This page is at the app's base path: the address with it, without the trailing slash.
+const publicUrl = input('publicUrl', 'text', {
+  required: true,
+  value: location.origin + basePath().replace(/\/$/, ''),
+});
 const submit = h('button', {
   type: 'submit',
   class: 'admin-btn',
@@ -174,7 +180,7 @@ form.append(
   field(
     'Address of this server',
     publicUrl,
-    'The address people open GreenGlow at, with http:// or https:// and the port if it isn’t the default. Pre-filled with the address this page is open at.',
+    `The address people open ${brandShortName()} at, with http:// or https://, the port if it isn’t the default, and the path if it is under one. Pre-filled with the address this page is open at.`,
   ),
   breakglass,
   methods,
@@ -224,7 +230,7 @@ function value(name: string): string {
 function body(): Record<string, unknown> {
   const method = selected();
   const base = {
-    publicUrl: origin(value('publicUrl')),
+    publicUrl: address(value('publicUrl')),
     breakglassPassword: value('breakglassPassword'),
     method,
   };
@@ -261,20 +267,16 @@ function body(): Record<string, unknown> {
 }
 
 /** The first problem with what's typed, as a message and the field to point at, or null. */
-/** The origin of an address typed in the form (http or https, no path), or null when it isn't one. */
-function origin(text: string): string | null {
+/**
+ * An address typed in the form, as the server keeps it (http or https, the host, and a path when
+ * the app is under one, with no trailing slash), or null when it isn't one.
+ */
+function address(text: string): string | null {
   try {
     const url = new URL(text.trim());
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    if (
-      (url.pathname !== '/' && url.pathname !== '') ||
-      url.search ||
-      url.hash ||
-      url.username ||
-      url.password
-    )
-      return null;
-    return url.origin;
+    if (url.search || url.hash || url.username || url.password) return null;
+    return url.origin + url.pathname.replace(/\/+$/, '');
   } catch {
     return null;
   }
@@ -288,10 +290,10 @@ function passwordProblem(password: string): string | null {
 }
 
 function checkLocally(): { field: string; text: string } | null {
-  if (origin(value('publicUrl')) === null)
+  if (address(value('publicUrl')) === null)
     return {
       field: 'publicUrl',
-      text: 'The address is an origin such as http://localhost:8080 or https://greenglow.example.com, with no path.',
+      text: 'The address is like http://localhost:8080 or https://greenglow.example.com, with a path only when the app is under one, such as https://example.com/greenglow.',
     };
   const breakglass = passwordProblem(value('breakglassPassword'));
   if (breakglass) return { field: 'breakglassPassword', text: breakglass };
@@ -313,7 +315,7 @@ function done(outcome: SetupDone): void {
     href: outcome.redirect,
     text: 'Continue to administration',
   });
-  say(outcome.warning ?? 'GreenGlow Connect is set up.', false);
+  say(outcome.warning ?? `${brandName()} is set up.`, false);
   message.append(h('p', {}, continueButton));
   setTimeout(() => location.assign(outcome.redirect), outcome.warning ? 8000 : 800);
 }
@@ -334,14 +336,14 @@ async function save(): Promise<void> {
   }
   submit.disabled = true;
   try {
-    const outcome = await api<SetupDone>('POST', '/auth/setup', body());
+    const outcome = await api<SetupDone>('POST', 'auth/setup', body());
     done(outcome);
   } catch (error) {
     if (error instanceof ApiError) {
       say(error.message, true);
       if (error.code) pointAt(error.code);
       if (error.status === 409)
-        message.append(h('p', {}, h('a', { href: '/admin.html', text: 'Go to administration' })));
+        message.append(h('p', {}, h('a', { href: 'admin.html', text: 'Go to administration' })));
     } else say('Setup could not be saved. Check the connection to the server and try again.', true);
     submit.disabled = false;
   }

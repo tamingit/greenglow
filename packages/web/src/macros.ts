@@ -7,6 +7,7 @@ import { button, h } from './admin/dom.ts';
 import { holdsPassword, parseHodMacro } from './hodmacro.ts';
 import { openMacroShareDialog } from './macroshare.ts';
 import './macros.css';
+import { brandShortName } from './brand.ts';
 
 interface MacroInfo {
   id: string;
@@ -133,7 +134,7 @@ export class MacrosPanel {
   async refresh(): Promise<void> {
     let macros: MacroInfo[];
     try {
-      macros = (await api<{ macros: MacroInfo[] }>('GET', '/api/macros')).macros;
+      macros = (await api<{ macros: MacroInfo[] }>('GET', 'api/macros')).macros;
     } catch (error) {
       this.#status.textContent = (error as Error).message;
       return;
@@ -230,7 +231,7 @@ export class MacrosPanel {
         void this.refresh();
         return;
       }
-      void api('PUT', `/api/macros/${macro.id}/keys`, { keys }).then(
+      void api('PUT', `api/macros/${macro.id}/keys`, { keys }).then(
         () => {
           this.#status.textContent = keys
             ? `${keys} plays ${macro.name}.`
@@ -293,15 +294,14 @@ export class MacrosPanel {
       return;
     }
     if (holdsPassword(macro)) {
-      this.#status.textContent =
-        'This macro holds a typed password, and GreenGlow never keeps one. In ACS, make it a prompt, then import it again.';
+      this.#status.textContent = `This macro holds a typed password, and ${brandShortName()} never keeps one. In ACS, make it a prompt, then import it again.`;
       return;
     }
     const base = (macro.name || chosen.name.replace(/\.[^.]*$/, '')).trim().slice(0, 50) || 'Macro';
     for (let n = 1; n < 10; n++) {
       const name = n === 1 ? base : `${base} (${n})`;
       try {
-        await api('POST', '/api/macros', { name, description: macro.description, content });
+        await api('POST', 'api/macros', { name, description: macro.description, content });
         this.#status.textContent = `Imported ${name}.`;
         break;
       } catch (error) {
@@ -316,7 +316,7 @@ export class MacrosPanel {
   /** Saves a macro as a .mac file, as ACS saves one. */
   async #export(macro: MacroInfo): Promise<void> {
     try {
-      const { content } = await api<{ content: string }>('GET', `/api/macros/${macro.id}`);
+      const { content } = await api<{ content: string }>('GET', `api/macros/${macro.id}`);
       const link = h('a', {
         href: URL.createObjectURL(new Blob([content], { type: 'text/xml' })),
         download: `${macro.name.replace(/[\\/:*?"<>|]+/g, '').trim() || 'macro'}.mac`,
@@ -330,7 +330,7 @@ export class MacrosPanel {
 
   async #create(name: string): Promise<void> {
     try {
-      await api('POST', '/api/macros', { name });
+      await api('POST', 'api/macros', { name });
       this.#form.hidden = true;
       this.#status.textContent = `Made ${name.trim()}.`;
     } catch (error) {
@@ -354,7 +354,7 @@ export class MacrosPanel {
     input.addEventListener('keydown', (event) => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        void api('PUT', `/api/macros/${macro.id}`, { name: input.value }).then(
+        void api('PUT', `api/macros/${macro.id}`, { name: input.value }).then(
           () => this.refresh(),
           (error: unknown) => (this.#status.textContent = (error as Error).message),
         );
@@ -369,7 +369,7 @@ export class MacrosPanel {
   async #delete(macro: MacroInfo): Promise<void> {
     if (!confirm(`Delete the macro ${macro.name}?`)) return;
     try {
-      await api('DELETE', `/api/macros/${macro.id}`);
+      await api('DELETE', `api/macros/${macro.id}`);
       this.#status.textContent = `Deleted ${macro.name}.`;
     } catch (error) {
       this.#status.textContent = (error as Error).message;

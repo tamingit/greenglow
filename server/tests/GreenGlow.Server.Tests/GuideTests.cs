@@ -28,12 +28,13 @@ public sealed class GuideTests
         var html = await guide.Content.ReadAsStringAsync();
         Assert.Contains("administrator guide", html);
 
-        // Every screenshot the guide shows is there.
-        var images = System.Text.RegularExpressions.Regex.Matches(html, "/api/admin/guide/images/([a-z0-9-]+\\.png)");
+        // Every screenshot the guide shows is there. Its addresses are relative to the help page,
+        // which is at the app's base path.
+        var images = System.Text.RegularExpressions.Regex.Matches(html, "src=\"(api/admin/guide/images/[a-z0-9-]+\\.png)\"");
         Assert.NotEmpty(images);
-        foreach (var image in images.Select(m => m.Value).Distinct())
+        foreach (var image in images.Select(m => m.Groups[1].Value).Distinct())
         {
-            var response = await client.GetAsync(image);
+            var response = await client.GetAsync("/" + image);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal("image/png", response.Content.Headers.ContentType?.MediaType);
             var bytes = await response.Content.ReadAsByteArrayAsync();

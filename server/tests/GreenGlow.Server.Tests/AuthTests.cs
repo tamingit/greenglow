@@ -84,14 +84,22 @@ public sealed class AuthTests
     }
 
     [Theory]
-    [InlineData(null, "/")]
-    [InlineData("", "/")]
-    [InlineData("/admin.html?x=1", "/admin.html?x=1")]
-    [InlineData("//evil.example/", "/")]
-    [InlineData("/\\evil.example", "/")]
-    [InlineData("https://evil.example/", "/")]
-    public void ReturnPathsStayOnThisSite(string? asked, string expected) =>
-        Assert.Equal(expected, AuthSetup.SafeReturn(asked));
+    [InlineData(null, "", "/")]
+    [InlineData("", "", "/")]
+    [InlineData("/admin.html?x=1", "", "/admin.html?x=1")]
+    [InlineData("//evil.example/", "", "/")]
+    [InlineData("/\\evil.example", "", "/")]
+    [InlineData("https://evil.example/", "", "/")]
+    // Under a base path: the page sends its own path, base and all; nothing good goes to the base.
+    [InlineData("/greenglow/admin.html", "/greenglow", "/greenglow/admin.html")]
+    [InlineData(null, "/greenglow", "/greenglow/")]
+    [InlineData("//evil.example/", "/greenglow", "/greenglow/")]
+    public void ReturnPathsStayOnThisSite(string? asked, string pathBase, string expected)
+    {
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Request.PathBase = pathBase;
+        Assert.Equal(expected, AuthSetup.SafeReturn(asked, context));
+    }
 
     [Fact]
     public async Task TheDevLoginIsIgnoredInProduction()

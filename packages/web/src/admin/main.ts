@@ -6,6 +6,7 @@ import './admin.css';
 import { api } from './api.ts';
 import { h, notify } from './dom.ts';
 import { adminsPanel } from './admins.ts';
+import { brandingPanel } from './branding.ts';
 import { connectionsPanel, settingsPanel } from './connections.ts';
 import { logPanel } from './log.ts';
 import { nodesPanel } from './nodes.ts';
@@ -37,9 +38,9 @@ function look(): void {
 
 async function start(): Promise<void> {
   look();
-  const me = await api<Me>('GET', '/api/me');
+  const me = await api<Me>('GET', 'api/me');
   if (!me.isAdmin) {
-    location.replace('/');
+    location.replace('./');
     return;
   }
   document.querySelector('#admin-user')!.textContent = me.upn;
@@ -49,6 +50,7 @@ async function start(): Promise<void> {
     ['nodes', 'Nodes', nodesPanel()],
     ['admins', 'Administrators', adminsPanel(me)],
     ['settings', 'Settings', settingsPanel()],
+    ['branding', 'Branding', brandingPanel()],
   ];
   const buttons = all.map(([id, label, panel]) => {
     const tab = h('button', {

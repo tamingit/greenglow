@@ -19,7 +19,7 @@ export function openMacroShareDialog(
   macro: { id: string; name: string },
   closed: () => void,
 ): void {
-  const path = `/api/macros/${macro.id}/shares`;
+  const path = `api/macros/${macro.id}/shares`;
   const status = h('p', { class: 'share-status', role: 'status' });
   const list = h('ul', { class: 'share-recipients', 'aria-label': 'Shared with' });
 
@@ -84,14 +84,14 @@ export function openMacroShareDialog(
     picker({
       label: 'Add a person',
       placeholder: 'Name or UPN',
-      search: search('/api/directory/users', 'users'),
+      search: search('api/directory/users', 'users'),
       pick: (entry) =>
         void give({ type: 'user', upn: entry.upn ?? entry.name }, entry.upn ?? entry.name),
     }),
     picker({
       label: 'Add a group you are in',
       placeholder: 'Group name',
-      search: search('/api/directory/my-groups', 'groups'),
+      search: search('api/directory/my-groups', 'groups'),
       pick: (entry) =>
         void give({ type: 'group', groupId: entry.id, name: entry.name }, entry.name),
     }),

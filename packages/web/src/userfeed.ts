@@ -5,6 +5,7 @@
 // whole list again as soon as it is.
 
 import type { SessionInfo } from './session.ts';
+import { socketUrl } from './urls.ts';
 
 const FIRST_DELAY_MS = 1000;
 const MAX_DELAY_MS = 30_000;
@@ -25,8 +26,7 @@ export class UserFeed {
   }
 
   #open(): void {
-    const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const socket = new WebSocket(`${scheme}//${location.host}/ws/user`);
+    const socket = new WebSocket(socketUrl('ws/user'));
     socket.addEventListener('message', (event: MessageEvent<string>) => {
       const message = JSON.parse(event.data) as { type: string; sessions?: SessionInfo[] };
       if (message.type !== 'sessions' || !message.sessions) return;
