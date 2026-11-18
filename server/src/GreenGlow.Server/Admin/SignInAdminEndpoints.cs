@@ -19,6 +19,9 @@ public static class SignInAdminEndpoints
 
     public sealed record RememberRequest(bool? Allow);
 
+    /// <summary>IBM i sign-in: group profiles and special authorities that make a profile an administrator.</summary>
+    public sealed record IbmAdminsRequest(string? Groups, string? Authorities);
+
     public sealed record NewUserRequest(string? User, string? Name, string? Password, bool? IsAdmin);
 
     public sealed record UserRequest(string? Name, string? Password, bool? Disabled, bool? IsAdmin);
@@ -92,6 +95,19 @@ public static class SignInAdminEndpoints
             return Results.NoContent();
         });
 
+        // Which IBM i profiles the IBM i makes administrators, checked at each IBM i sign-in.
+        admin.MapPut("/signin/ibmi-admins", async (IbmAdminsRequest request, HttpContext context, SettingsStore settings,
+            PasswordLogin.Services services) =>
+        {
+            if (!IbmAdmins.TryParse(request.Groups, request.Authorities, out var rule, out var field, out var problem))
+                return ConnectionEndpoints.Problem(field!, problem!);
+            await settings.SetTextAsync(rule.Settings());
+            var me = CurrentUser.From(context.User)!;
+            await PasswordLogin.LogAsync(context, services, me.Upn, me.Id, "",
+                $"IBM i administrators: groups {Words(rule.Groups)}; special authorities {Words(rule.Authorities)}");
+            return Results.Json(DescribeIbmAdmins(rule));
+        });
+
         admin.MapGet("/users", async (UserStore users, SignInConfig config) => Results.Json(new
         {
             method = PasswordLogin.Name(config.Mode),
@@ -155,7 +171,8 @@ public static class SignInAdminEndpoints
             {
                 if (request.Name?.Trim() is { Length: > 0 and <= 128 } name) u.DisplayName = name;
                 if (request.Disabled is { } disabled) u.Disabled = disabled;
-                if (request.IsAdmin == true) u.IsAdmin = true;
+                // Named here, the role is the administrator's to take away, not the IBM i's.
+                if (request.IsAdmin == true) (u.IsAdmin, u.AdminFromIbmI) = (true, false);
                 if (hash is not null)
                 {
                     u.PasswordHash = hash;
@@ -200,7 +217,12 @@ public static class SignInAdminEndpoints
         // Remembering IBM i passwords needs Credentials__Key; an administrator may still forbid it.
         rememberAvailable = seal.Available,
         rememberAllowed = settings.Text(IbmLogins.AllowRememberKey) != "false",
+        ibmAdmins = DescribeIbmAdmins(IbmAdmins.From(settings)),
     };
+
+    private static object DescribeIbmAdmins(IbmAdmins rule) => new { groups = rule.Groups, authorities = rule.Authorities };
+
+    private static string Words(IReadOnlyList<string> names) => names.Count == 0 ? "none" : string.Join(", ", names);
 
     private static object Describe(AppUser u, SignInConfig config) => new
     {
@@ -215,6 +237,8 @@ public static class SignInAdminEndpoints
             _ => "entra",
         },
         isAdmin = u.IsAdmin,
+        // Made one by the IBM i (IbmAdmins): it stops being one when the IBM i stops saying so.
+        adminFromIbmI = u.AdminFromIbmI,
         disabled = u.Disabled,
         mustChangePassword = u.MustChangePassword,
         lastSeenAt = u.LastSeenAt == default ? (DateTimeOffset?)null : u.LastSeenAt,

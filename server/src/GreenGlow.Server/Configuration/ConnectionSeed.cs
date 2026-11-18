@@ -50,7 +50,10 @@ public sealed class SeedConnection
     /// <summary>The system's colour on the page, #rrggbb; none if missing.</summary>
     public string? Color { get; set; }
 
-    /// <summary>Entra ID users and groups allowed to use it. Without any, only administrators can.</summary>
+    /// <summary>
+    /// Entra ID users and groups allowed to use it. Without any, only administrators can. The
+    /// group "Everyone" is built in: every signed-in user.
+    /// </summary>
     public List<SeedAccess> Access { get; set; } = [];
 }
 
@@ -304,7 +307,12 @@ public static class ConnectionSeed
             var name = grant.PrincipalId[ByName.Length..];
             try
             {
-                if (grant.PrincipalType == PrincipalType.Group)
+                if (grant.PrincipalType == PrincipalType.Group && Everyone.IsName(name))
+                {
+                    // Built in: no directory lookup, so it works with every sign-in method.
+                    (grant.PrincipalId, grant.DisplayName) = (Everyone.Id, Everyone.Name);
+                }
+                else if (grant.PrincipalType == PrincipalType.Group)
                 {
                     var groups = await directory.FindGroupsByNameAsync(name);
                     grant.PrincipalId = groups.Count switch

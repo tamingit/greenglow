@@ -21,7 +21,7 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
   - the connection log;
   - the session limits.
 
-  A connection with no access grants is for administrators only.
+  A connection with no access grants is for administrators only. The group Everyone is built in (`People/Everyone.cs`): every signed-in user, whatever the sign-in method, and whether or not the directory answers.
 - **Sessions and sharing.**
   - **Idle retention.** A session outlives the browser for a few minutes.
   - **Unexpected ends.** If a session leaves the page without the user asking, a popup says why (`ended.ts`): sign-off, the IBM i or the server lost, sharing stopped, or ended from elsewhere.
@@ -188,6 +188,8 @@ Settings use ASP.NET Core names (`Section__Key`) from the environment, and in De
 | `Data__DbPath` | The SQLite file (`/app/data/greenglow.db` in the container). It also holds the sign-in keys |
 | `Entra__TenantId`, `Entra__ClientId`, `Entra__ClientSecret` | The Entra ID app registration, with redirect URI `<public URL>/auth/callback`. Production refuses to start without them, unless in demo mode |
 | `Entra__InitialAdminUpn` | Becomes an administrator when it signs in. Add more on the admin page |
+| `Setup__Method`, `Setup__BreakglassPassword`, `Setup__PublicUrl`, `Setup__Local__*`, `Setup__IbmI__*`, `Setup__Entra__*` | First-run setup without the setup page (`SetupOptions`): applied once, on the first start of a server that isn't set up, then ignored. A refused value stops the start, naming the variable. IBM i sign-in takes `Setup__IbmI__Connection` (seeded or stored) and no IBM i password |
+| `Setup__IbmI__AdminGroups`, `Setup__IbmI__AdminAuthorities` | IBM i sign-in: profiles in these group profiles (group or supplemental), or with these special authorities, are administrators (`IbmAdmins`). The server reads them at each sign-in with QSYRUSRI through the remote command server (`HostServers/RemoteCommand.cs`), and takes the role away when the IBM i stops saying so (or can't be asked). Later changed with `PUT /api/admin/signin/ibmi-admins` |
 | `Auth__DevLogin` | Sign in as any UPN. Development or Testing only, and never when Entra ID is configured |
 | `Demo__Enabled`, `Demo__GuestHours` (8), `Demo__GuestsPerHour` (10) | Demo mode: guest sign-in, demo systems only. See [Demo mode](#demo-mode) |
 | `Seed__ConnectionsFile`, `Seed__ConnectionsJson` | Connections added at start when the database doesn't have them; later changes are made on the admin page. In demo mode the seed is the whole configuration |

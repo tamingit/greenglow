@@ -28,12 +28,12 @@ public static class CertificateEndpoints
     public static void MapCertificateEndpoints(this RouteGroupBuilder admin)
     {
         admin.MapPost("/connections/{id:guid}/certificate/check", async (Guid id, IDbContextFactory<GreenGlowDb> dbs,
-            HostConnector connector, CancellationToken cancel) =>
+            HostConnector connector, ILogger<HostConnector> log, CancellationToken cancel) =>
         {
             var connection = await SecureConnectionAsync(dbs, id);
             if (connection is null) return Results.NotFound();
             var target = TargetCatalog.ToTarget(connection);
-            var (chain, problem) = await InspectAsync(target, cancel);
+            var (chain, problem) = await InspectAsync(target, log, cancel);
             if (problem is not null) return problem;
             var leaf = chain[0];
             var top = chain[^1];
@@ -52,12 +52,13 @@ public static class CertificateEndpoints
         });
 
         admin.MapPost("/connections/{id:guid}/certificate/trust", async (Guid id, TrustRequest request, HttpContext context,
-            IDbContextFactory<GreenGlowDb> dbs, HostConnector connector, TimeProvider clock, CancellationToken cancel) =>
+            IDbContextFactory<GreenGlowDb> dbs, HostConnector connector, TimeProvider clock, ILogger<HostConnector> log,
+            CancellationToken cancel) =>
         {
             await using var db = await dbs.CreateDbContextAsync(cancel);
             var connection = await db.Connections.Include(c => c.Grants).FirstOrDefaultAsync(c => c.Id == id, cancel);
             if (connection is null || !connection.Secure) return Results.NotFound();
-            var (chain, problem) = await InspectAsync(TargetCatalog.ToTarget(connection), cancel);
+            var (chain, problem) = await InspectAsync(TargetCatalog.ToTarget(connection), log, cancel);
             if (problem is not null) return problem;
             var leaf = chain[0];
 
@@ -148,7 +149,7 @@ public static class CertificateEndpoints
 
     /// <summary>The certificates, or a problem response saying why they couldn't be read.</summary>
     private static async Task<(IReadOnlyList<X509Certificate2> Chain, IResult? Problem)> InspectAsync(
-        Configuration.Target target, CancellationToken cancel)
+        Configuration.Target target, ILogger log, CancellationToken cancel)
     {
         try
         {
@@ -156,6 +157,8 @@ public static class CertificateEndpoints
         }
         catch (Exception e) when (e is SocketException or AuthenticationException or IOException or OperationCanceledException)
         {
+            log.LogWarning("certificate check for {Target} ({Host}:{Port}) failed: {Error}: {Message}",
+                target.Name, target.Host, target.Port, e.GetType().Name, e.InnerException?.Message ?? e.Message);
             return ([], Results.Json(new
             {
                 error = "unreachable",

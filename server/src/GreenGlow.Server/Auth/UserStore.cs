@@ -216,6 +216,7 @@ public sealed class UserStore(IDbContextFactory<GreenGlowDb> dbs, TimeProvider c
             db.Users.Add(user);
         }
         user.IsAdmin = true;
+        user.AdminFromIbmI = false;
         await db.SaveChangesAsync();
         return user;
     }
@@ -231,6 +232,7 @@ public sealed class UserStore(IDbContextFactory<GreenGlowDb> dbs, TimeProvider c
         if (user.Source == UserSource.Breakglass) return false;
         if (await db.Users.CountAsync(u => u.IsAdmin) <= 1) return false;
         user.IsAdmin = false;
+        user.AdminFromIbmI = false;
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
         return true;

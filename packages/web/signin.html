@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1d4d2c" />
+    <link rel="icon" href="/icons/favicon-32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/icons/icon-192.png" type="image/png" sizes="192x192" />
+    <title>Sign in to GreenGlow Connect</title>
+  </head>
+  <body class="admin signin">
+    <header class="app-bar">
+      <div class="bar-inner">
+        <span class="bar-brand">
+          <img class="bar-brand-mark" src="/icons/icon-192.png" alt="" width="32" height="32" />
+          <h1 class="bar-brand-name">GreenGlow Connect</h1>
+        </span>
+        <span class="admin-bar-title">Sign in</span>
+        <a class="bar-btn" href="/help.html" target="_blank" rel="noopener">Help</a>
+      </div>
+    </header>
+    <main class="admin-main signin-main">
+      <h2 class="signin-title" id="signin-title">Sign in</h2>
+      <p class="signin-intro" id="signin-intro"></p>
+      <p id="signin-message" class="admin-message" role="status" hidden></p>
+
+      <form id="signin-form" class="signin-form" novalidate hidden>
+        <label class="admin-field">
+          <span id="signin-user-label">User name</span>
+          <input
+            class="admin-input"
+            name="user"
+            type="text"
+            autocomplete="username"
+            autocapitalize="off"
+            spellcheck="false"
+            required
+          />
+        </label>
+        <label class="admin-field">
+          <span>Password</span>
+          <input
+            class="admin-input"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </label>
+        <fieldset id="signin-change" class="signin-change" hidden disabled>
+          <legend>Choose a new password</legend>
+          <label class="admin-field">
+            <span>New password</span>
+            <input
+              class="admin-input"
+              name="newPassword"
+              type="password"
+              autocomplete="new-password"
+              required
+            />
+            <span class="signin-hint" id="signin-change-hint"></span>
+          </label>
+          <label class="admin-field">
+            <span>Confirm new password</span>
+            <input
+              class="admin-input"
+              name="newPasswordConfirm"
+              type="password"
+              autocomplete="new-password"
+              required
+            />
+          </label>
+        </fieldset>
+        <div class="signin-actions">
+          <button type="submit" class="admin-btn" id="signin-submit">Sign in</button>
+        </div>
+      </form>
+
+      <details id="breakglass" class="signin-breakglass" hidden>
+        <summary>Breakglass administrator</summary>
+        <form id="breakglass-form" class="signin-form" novalidate>
+          <p class="signin-hint">
+            For an administrator, when the usual sign-in doesn’t work. Every use is logged.
+          </p>
+          <label class="admin-field">
+            <span>Breakglass password</span>
+            <input
+              class="admin-input"
+              name="breakglassPassword"
+              type="password"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <div class="signin-actions">
+            <button type="submit" class="admin-btn" id="breakglass-submit">
+              Sign in as the breakglass administrator
+            </button>
+          </div>
+        </form>
+      </details>
+    </main>
+    <script type="module" src="/src/signin/main.ts"></script>
+  </body>
+</html>

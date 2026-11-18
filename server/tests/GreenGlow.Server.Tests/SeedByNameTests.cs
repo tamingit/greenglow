@@ -40,6 +40,46 @@ public sealed class SeedByNameTests
     }
 
     [Fact]
+    public async Task EveryoneIsBuiltInAndOpensAConnectionToEverySignedInUser()
+    {
+        // Dev:Groups has no Everyone: the name means the built-in group in every sign-in method.
+        using var factory = Factory("""
+            {"connections":[{"name":"shared","url":"tcp://h","access":[{"type":"group","name":"everyone"}]}]}
+            """);
+        _ = factory.Server;
+        await using (var db = factory.Services.GetRequiredService<IDbContextFactory<GreenGlowDb>>().CreateDbContext())
+        {
+            var grant = (await db.Connections.Include(c => c.Grants).SingleAsync()).Grants.Single();
+            Assert.Equal((PrincipalType.Group, Everyone.Id, "Everyone"), (grant.PrincipalType, grant.PrincipalId, grant.DisplayName));
+        }
+        var someone = await factory.SignedInClientAsync("someone@example.com");
+        Assert.Contains("\"shared\"", await someone.GetStringAsync("/api/targets"));
+    }
+
+    [Fact]
+    public async Task EveryoneByNameNeedsNoDirectoryLookup()
+    {
+        using var factory = Factory("""{"connections":[]}""");
+        await using var db = factory.Services.GetRequiredService<IDbContextFactory<GreenGlowDb>>().CreateDbContext();
+        var seed = ConnectionSeed.Parse("seed", """{"connections":[{"name":"x","url":"tcp://h","access":[{"type":"group","name":"Everyone"}]}]}""");
+        Assert.Equal(["x"], await ConnectionSeed.ApplyAsync(db, seed, new NoDirectory(), TimeProvider.System));
+        Assert.Equal(Everyone.Id, (await db.Grants.SingleAsync()).PrincipalId);
+    }
+
+    [Fact]
+    public async Task AdministratorsFindEveryoneAmongTheGroups()
+    {
+        using var factory = new RelayFactory(new Dictionary<string, string?>
+        {
+            ["Server:PublicUrl"] = T.Origin,
+            ["Entra:InitialAdminUpn"] = "boss@example.com",
+            ["Seed:ConnectionsJson"] = """{"connections":[]}""",
+        });
+        var admin = await factory.SignedInClientAsync("boss@example.com");
+        Assert.Contains($"\"{Everyone.Id}\"", await admin.GetStringAsync("/api/admin/directory/groups?q=every"));
+    }
+
+    [Fact]
     public async Task AGroupGivenByNameAndByIdIsOneGrant()
     {
         var id = LocalDirectory.GroupId("Ops");
@@ -77,6 +117,15 @@ public sealed class SeedByNameTests
         var error = await Assert.ThrowsAsync<ConfigException>(() => ConnectionSeed.ApplyAsync(db, seed, new TwinGroups(), TimeProvider.System));
         Assert.Contains("2 Entra ID groups have that name", error.Message);
         Assert.Empty(await db.Connections.ToListAsync());
+    }
+
+    private sealed class NoDirectory : IDirectory
+    {
+        public Task<IReadOnlyList<DirectoryEntry>> FindGroupsByNameAsync(string name, CancellationToken cancel = default) => throw new NotSupportedException();
+        public Task<DirectoryEntry?> FindUserAsync(string upn, CancellationToken cancel = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<DirectoryEntry>> SearchUsersAsync(string query, CancellationToken cancel = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<DirectoryEntry>> SearchGroupsAsync(string query, CancellationToken cancel = default) => throw new NotSupportedException();
+        public Task<IReadOnlySet<string>> MemberGroupsAsync(string userId, CancellationToken cancel = default) => throw new NotSupportedException();
     }
 
     private sealed class TwinGroups : IDirectory

@@ -88,6 +88,10 @@
     and may open sessions on it. × takes access away.
   </p>
   <p>
+    To open a system to every signed-in user, add the group <strong>Everyone</strong>. It is built
+    in, so it doesn't depend on Entra ID: everyone who can sign in to GreenGlow is in it.
+  </p>
+  <p>
     <strong>A connection nobody has access to is for administrators only.</strong> Add a new system,
     try it yourself, then give it to a group. Group membership is read from Entra ID and kept for
     five minutes, so someone just added to a group may wait that long. If Entra ID can't be reached,
@@ -214,6 +218,17 @@
     own. The last administrator can't be removed. The <em>initial</em> administrator is set in the
     server's configuration (<code>Entra__InitialAdminUpn</code>) and becomes one again whenever they
     sign in.
+  </p>
+  <p>
+    <strong>With IBM i sign-in, the IBM i can decide.</strong> Name group profiles, special
+    authorities, or both (<code>Setup__IbmI__AdminGroups</code> and
+    <code>Setup__IbmI__AdminAuthorities</code> at setup, such as <code>GGADMIN</code> and
+    <code>*SECADM</code>). At each sign-in GreenGlow asks the IBM i about the profile through its
+    remote command server, with the password just typed. A profile in one of those groups, as its
+    group profile or a supplemental group, or with one of those special authorities, becomes an
+    administrator. It stops being one at its next sign-in once the IBM i no longer says so, or if
+    the IBM i can't be asked. Administrators you add here keep the role whatever the IBM i says. The
+    remote command server (port 8475, or 9475 over TLS) must be open to GreenGlow for this.
   </p>
 </section>
 

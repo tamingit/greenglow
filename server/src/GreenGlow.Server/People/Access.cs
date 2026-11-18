@@ -11,7 +11,8 @@ namespace GreenGlow.Server.People;
 /// Who may use which connection: administrators may use any; anyone else needs a grant to
 /// them or to a group they belong to (directly or through other groups). Group memberships
 /// come from the directory and are kept for a few minutes. If the directory can't be reached,
-/// the user's groups count as none: access fails closed.
+/// the user's directory groups count as none: access fails closed. Every signed-in user is in
+/// the built-in group Everyone, whether the directory answers or not.
 /// </summary>
 public sealed class Access(
     IDbContextFactory<GreenGlowDb> dbs,
@@ -53,20 +54,24 @@ public sealed class Access(
 
     private async Task<bool> IsAdminAsync(CurrentUser user) => (await users.FindAsync(user.Id))?.IsAdmin == true;
 
+    /// <summary>
+    /// The groups a signed-in user is in, Everyone included. Only ever asked about the user
+    /// making the request, whom sign-in has already checked (a disabled user gets no further).
+    /// </summary>
     public async Task<IReadOnlySet<string>> GroupsAsync(string userId, CancellationToken cancel = default)
     {
         var now = clock.GetUtcNow();
         if (_groups.TryGetValue(userId, out var cached) && cached.Until > now) return cached.Groups;
         try
         {
-            var groups = await directory.MemberGroupsAsync(userId, cancel);
+            var groups = new HashSet<string>(await directory.MemberGroupsAsync(userId, cancel)) { Everyone.Id };
             _groups[userId] = (groups, now + GroupCacheTime);
             return groups;
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
-            log.LogWarning("group lookup failed for {User}: {Error}; treating as no groups", userId, e.GetType().Name);
-            return new HashSet<string>();
+            log.LogWarning("group lookup failed for {User}: {Error}; treating as in Everyone only", userId, e.GetType().Name);
+            return new HashSet<string> { Everyone.Id };
         }
     }
 }

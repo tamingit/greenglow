@@ -19,6 +19,8 @@
       // Entra ID groups and people allowed to use it. None: administrators only. A group by its
       // exact display name, a person by UPN: they are looked up in Entra ID when the connection
       // is first added. If two groups share a name, give that one's object ID as "id" instead.
+      // The group "Everyone" is built in: every signed-in user, with no Entra ID lookup (an Entra
+      // ID group that is also called Everyone must be given by its object ID).
       "access": [
         { "type": "group", "name": "IBM i developers" },
         { "type": "user", "name": "someone@example.com" }
@@ -33,6 +35,13 @@
       "maxSessionsPerUser": 3,
       // By object ID instead: { "type": "group", "id": "<object ID>", "name": "IBM i users" }
       "access": [{ "type": "group", "name": "IBM i users" }]
+    },
+    {
+      "name": "dev",
+      "label": "Development",
+      "url": "tls://ibmi-dev.example.com:992",
+      // Every signed-in user may use it.
+      "access": [{ "type": "group", "name": "Everyone" }]
     }
   ]
 }
