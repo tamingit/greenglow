@@ -4,6 +4,8 @@ A browser-based TN5250 client for IBM i. It gives the existing 5250 green screen
 
 **Status: Phase 0 (spike), with sign-in, sessions and administration built.** A C# server holds the Telnet sessions. Users sign in with Entra ID, and administrators decide who may use which IBM i system. The engine negotiates TN5250E, builds the screen model, handles keys and read replies, and answers host records it can't process with a negative response, as a 5494 does. The page has the Classic look with the ACS key map, plus GreenGlow and Night Shift looks. The first live sign-on through the server and the reconnect test are next. It isn't usable for real work yet, so keep using ACS.
 
+Its sister project, [Sim i](https://github.com/tamingit/sim-i), is an IBM i emulator that was split out of GreenGlow Connect. It serves 5250 sessions, so you can try GreenGlow Connect without a real IBM i.
+
 ## How it works
 
 ```
