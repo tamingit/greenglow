@@ -35,7 +35,8 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
   - It is named after its screen's title, and coloured for its system.
   - A lock shows the link: green for verified TLS, yellow for TLS without a check, red for plain Telnet.
   - Up to 10 tabs. Alt+1 to Alt+0 switch, Alt+N or + opens a new one, and Alt+J joins a session just shared with the user.
-  - The top bar holds only the logo, the tabs, who has the keyboard, the status, Full screen and the menu.
+  - **Tiles** (`tiles.ts`). The Tile button (Alt+T) shows the tabs side by side, up to 3 wide and 2 tall; the menu's Tile layout picks Auto or a grid. The active tab's tile holds the one terminal (`#stage` moves into it); the others are pictures painted by their own renderers, and a click makes one active. With more tabs than tiles, the most recently used show.
+  - The top bar holds only the logo, the tabs, who has the keyboard, the status, Tile, Full screen and the menu.
 - **Data.** SQLite through EF Core holds:
   - settings and users;
   - connections, with grants and colours;

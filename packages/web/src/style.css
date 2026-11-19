@@ -517,7 +517,8 @@ a.bar-menu-item {
     white-space: nowrap;
   }
 
-  .app-bar .bar-fullscreen {
+  .app-bar .bar-fullscreen,
+  .app-bar .bar-tile {
     display: none;
   }
 }

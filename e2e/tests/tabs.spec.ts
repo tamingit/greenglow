@@ -162,4 +162,52 @@ test.describe('session tabs', () => {
     await expect(tabs(page).first()).toHaveAttribute('aria-selected', 'true');
     await expectScreen(page, /Sign On/);
   });
+
+  test('Tile shows the tabs side by side, and a click on one makes it active', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await signIn(page, 'tabs.tile@example.com');
+    await connect(page, 'Fake IBM i');
+    await signOnFake(page);
+    await page.keyboard.press('Alt+N');
+    await expect(tabs(page)).toHaveText(['IBM i Main Menu', 'Sign On']);
+
+    const tile = page.getByRole('button', { name: 'Tile', exact: true });
+    await tile.click();
+    await expect(tile).toHaveAttribute('aria-pressed', 'true');
+    const tiles = page.locator('.tile:visible');
+    await expect(tiles).toHaveCount(2);
+    // The active tab's tile holds the terminal; the other shows its own screen.
+    await expect(tiles.nth(1)).toHaveAttribute('data-active', '');
+    await expect(tiles.nth(1).locator('#terminal')).toBeVisible();
+    await expect(tiles.nth(0).locator('.tile-screen')).toContainText('IBM i Main Menu');
+    // Keys still go to the active tab.
+    await expectScreen(page, /Sign On/);
+    await signOnFake(page);
+    await expect(tabs(page)).toHaveText(['IBM i Main Menu', 'IBM i Main Menu']);
+
+    await tiles.nth(0).click();
+    await expect(tabs(page).nth(0)).toHaveAttribute('aria-selected', 'true');
+    await expect(tiles.nth(0).locator('#terminal')).toBeVisible();
+    await expect(page.locator('#terminal')).toBeFocused();
+    await expect(tiles.nth(1).locator('.tile-screen')).toContainText('IBM i Main Menu');
+
+    // Alt+T shows one again, and the choice is kept.
+    await page.keyboard.press('Alt+T');
+    await expect(tiles).toHaveCount(0);
+    await expect(page.locator('.workspace > #stage')).toBeVisible();
+    await page.keyboard.press('Alt+T');
+    await page.reload();
+    await expect(page.locator('.tile:visible')).toHaveCount(2);
+  });
+
+  test('a tile layout with more cells than tabs offers a new session', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await signIn(page, 'tabs.layout@example.com');
+    await page.click('.bar-menu summary');
+    await page.locator('label[for="tile-layout-2x2"]').click();
+    await expect(page.locator('.tile:visible')).toHaveCount(4);
+    await expect(page.locator('.tile[data-empty]:visible')).toHaveCount(3);
+    await page.locator('.tile-add:visible').first().click();
+    await expect(tabs(page)).toHaveCount(2);
+  });
 });

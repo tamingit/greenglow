@@ -32,6 +32,19 @@
         </div>
 
         <button
+          id="tile"
+          type="button"
+          class="bar-btn bar-btn-icon bar-tile"
+          aria-label="Tile"
+          aria-pressed="false"
+          title="Tile the sessions (Alt+T)"
+        >
+          <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M2 2.5h5v5H2ZM9 2.5h5v5H9ZM2 9.5h5v4H2ZM9 9.5h5v4H9Z" />
+          </svg>
+        </button>
+
+        <button
           id="fullscreen"
           type="button"
           class="bar-btn bar-btn-icon bar-fullscreen"
@@ -96,6 +109,21 @@
                 Font size
                 <select id="font-size"></select>
               </label>
+            </div>
+            <button id="menu-tile" type="button" class="bar-menu-item" aria-pressed="false">
+              <svg class="bar-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2 2.5h5v5H2ZM9 2.5h5v5H9ZM2 9.5h5v4H2ZM9 9.5h5v4H9Z" />
+              </svg>
+              <span id="menu-tile-label">Tile the sessions</span>
+            </button>
+            <div class="bar-menu-section">
+              <span id="tile-layout-label" class="bar-menu-heading">Tile layout</span>
+              <div
+                id="tile-layout"
+                class="bar-segmented"
+                role="radiogroup"
+                aria-labelledby="tile-layout-label"
+              ></div>
             </div>
             <div id="color-section" class="bar-menu-section" hidden>
               <span id="color-label" class="bar-menu-heading">Colour</span>
