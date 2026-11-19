@@ -3,6 +3,7 @@
 
 import '../style.css';
 import './help.css';
+import { brandName } from '../brand.ts';
 
 type Guide = 'user' | 'admin';
 
@@ -25,7 +26,7 @@ function look(): void {
 /** Whether the signed-in user is an administrator; false when signed out or unsure. */
 async function isAdmin(): Promise<boolean> {
   try {
-    const response = await fetch('/api/me', { credentials: 'same-origin' });
+    const response = await fetch('api/me', { credentials: 'same-origin' });
     if (!response.ok) return false;
     return ((await response.json()) as { isAdmin?: boolean }).isAdmin === true;
   } catch {
@@ -35,7 +36,7 @@ async function isAdmin(): Promise<boolean> {
 
 async function loadAdmin(): Promise<boolean> {
   if (adminLoaded) return true;
-  const response = await fetch('/api/admin/guide', { credentials: 'same-origin' });
+  const response = await fetch('api/admin/guide', { credentials: 'same-origin' });
   if (!response.ok) return false;
   // The guide is the server's own HTML (never anything from the IBM i), sent to administrators
   // only. Parsed apart from the page, so nothing in it runs.
@@ -70,8 +71,7 @@ function show(guide: Guide): void {
   admin.hidden = guide !== 'admin';
   for (const link of guides.querySelectorAll<HTMLAnchorElement>('a[data-guide]'))
     link.setAttribute('aria-current', String(link.dataset.guide === guide));
-  document.title =
-    guide === 'admin' ? 'GreenGlow Connect administrator guide' : 'GreenGlow Connect help';
+  document.title = guide === 'admin' ? `${brandName()} administrator guide` : `${brandName()} help`;
   contents(guide === 'admin' ? admin : user);
 }
 

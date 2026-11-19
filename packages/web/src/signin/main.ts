@@ -7,6 +7,7 @@
 import '../style.css';
 import '../admin/admin.css';
 import './signin.css';
+import { basePath } from '../urls.ts';
 
 interface MethodInfo {
   method: string;
@@ -38,7 +39,7 @@ const breakglass = document.querySelector<HTMLDetailsElement>('#breakglass')!;
 const breakglassForm = document.querySelector<HTMLFormElement>('#breakglass-form')!;
 const breakglassSubmit = document.querySelector<HTMLButtonElement>('#breakglass-submit')!;
 
-const returnUrl = new URLSearchParams(location.search).get('returnUrl') ?? '/';
+const returnUrl = new URLSearchParams(location.search).get('returnUrl') ?? basePath();
 let method: 'local' | 'ibmi' = 'local';
 
 function control(owner: HTMLFormElement, name: string): HTMLInputElement {
@@ -140,13 +141,13 @@ async function signIn(): Promise<void> {
   submit.disabled = true;
   try {
     const target = changing
-      ? await post('/auth/password/change', {
+      ? await post('auth/password/change', {
           user: user.value.trim(),
           password: password.value,
           newPassword: next.value,
           returnUrl,
         })
-      : await post('/auth/password', {
+      : await post('auth/password', {
           user: user.value.trim(),
           password: password.value,
           returnUrl,
@@ -186,7 +187,7 @@ async function signInBreakglass(): Promise<void> {
   }
   breakglassSubmit.disabled = true;
   try {
-    const target = await post('/auth/breakglass', { password: password.value, returnUrl });
+    const target = await post('auth/breakglass', { password: password.value, returnUrl });
     say('Signed in.', false);
     location.assign(target);
   } catch (refusal) {
@@ -215,7 +216,7 @@ breakglass.addEventListener('toggle', () => {
 async function start(): Promise<void> {
   let info: MethodInfo;
   try {
-    const response = await fetch('/auth/method');
+    const response = await fetch('auth/method');
     if (!response.ok) throw new Error(String(response.status));
     info = (await response.json()) as MethodInfo;
   } catch {
@@ -224,7 +225,7 @@ async function start(): Promise<void> {
   }
   if (info.method !== 'local' && info.method !== 'ibmi') {
     // Another method signs in elsewhere: /auth/signin knows where.
-    location.replace(`/auth/signin?returnUrl=${encodeURIComponent(returnUrl)}`);
+    location.replace(`auth/signin?returnUrl=${encodeURIComponent(returnUrl)}`);
     return;
   }
   method = info.method;

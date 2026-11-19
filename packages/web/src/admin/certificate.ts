@@ -58,7 +58,7 @@ export function certificateSection(
   serverCa: boolean,
   changed: () => Promise<void>,
 ): HTMLElement {
-  const path = `/api/admin/connections/${connection.id}/certificate`;
+  const path = `api/admin/connections/${connection.id}/certificate`;
   const result = h('div', { class: 'admin-cert-check', hidden: true });
 
   async function trust(body: { sha256?: string; pem?: string; acceptName?: string }) {

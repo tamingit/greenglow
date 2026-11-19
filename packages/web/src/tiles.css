@@ -1,0 +1,165 @@
+/* Tiles (tiles.ts): the session tabs side by side, up to 3 wide and 2 tall. Each tile is topped
+   with its system's colour and named like its tab. The active one holds the terminal and is
+   outlined; the others show their screens without a cursor, and a click makes one active. */
+
+.tiles {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(var(--tile-columns, 1), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--tile-rows, 1), minmax(0, 1fr));
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tiles[hidden],
+.tile[hidden],
+.tile-head[hidden],
+.tile-stage[hidden],
+.tile-note[hidden],
+.tile-add[hidden] {
+  display: none;
+}
+
+.tile {
+  --tile-color: var(--page-border);
+
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--page-border);
+  border-radius: 8px;
+  background: var(--page-panel);
+  box-shadow: inset 0 3px 0 var(--tile-color);
+  cursor: pointer;
+}
+
+.tile[data-colored] {
+  --tile-color: var(--system-color);
+}
+
+.tile[data-active] {
+  border-color: var(--page-fg);
+  outline: 1px solid var(--page-fg);
+  cursor: default;
+}
+
+.tile[data-empty] {
+  border-style: dashed;
+  background: transparent;
+  box-shadow: none;
+  cursor: default;
+}
+
+.tile-head {
+  display: flex;
+  flex: none;
+  gap: 0.5rem;
+  align-items: baseline;
+  min-width: 0;
+  padding: 0.375rem 0.625rem 0.25rem;
+  color: var(--page-muted);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 0.75rem;
+}
+
+.tile-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tile[data-active] .tile-title {
+  color: var(--page-fg);
+  font-weight: 600;
+}
+
+.tile-system {
+  flex: none;
+  margin-left: auto;
+}
+
+.tile-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 0.25rem 0.25rem;
+}
+
+.tile-body > #stage,
+.tile-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.tile-stage[data-size='fixed'] {
+  overflow: auto;
+}
+
+.tile-stage[data-size='fixed'] > .terminal {
+  box-sizing: content-box;
+  width: calc(var(--cell-width) * var(--columns));
+  margin: 0 auto;
+}
+
+/* Another session's screen is a picture of it: no cursor, no hover, a little dimmer. */
+.tile-screen {
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.tile:hover .tile-screen {
+  opacity: 1;
+}
+
+.tile-screen .cursor,
+.tile-screen .keys {
+  visibility: hidden;
+}
+
+.tile-note {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  margin: 0;
+  color: var(--page-muted);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.tile-add {
+  align-self: center;
+  margin: auto;
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--page-border);
+  border-radius: 6px;
+  background: var(--page-panel);
+  color: var(--page-fg);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.tile-add:hover {
+  background: var(--page-border);
+}
+
+/* Full screen while tiled: every tile, on the page's colour. */
+.workspace:fullscreen {
+  box-sizing: border-box;
+  padding: 0.5rem;
+  background: var(--page-bg);
+}
+
+/* The Tile button shows when tiles are on. */
+.app-bar .bar-tile[aria-pressed='true'] {
+  background: var(--bar-control-hover);
+  border-color: var(--bar-fg);
+}

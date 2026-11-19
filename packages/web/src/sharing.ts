@@ -14,6 +14,7 @@ import { api } from './admin/api.ts';
 import { button, h } from './admin/dom.ts';
 import type { ControlState, SessionInfo } from './session.ts';
 import './sharing.css';
+import { brandShortName } from './brand.ts';
 
 type Access = 'view' | 'full';
 
@@ -264,7 +265,7 @@ export class SharingPanel {
       // Someone it is shared with: who else is in it, read only, the owner first.
       let found: People;
       try {
-        found = await api<People>('GET', `/api/sessions/${encodeURIComponent(session.id)}/people`);
+        found = await api<People>('GET', `api/sessions/${encodeURIComponent(session.id)}/people`);
       } catch {
         return;
       }
@@ -281,7 +282,7 @@ export class SharingPanel {
       shares = (
         await api<{ shares: Share[] }>(
           'GET',
-          `/api/sessions/${encodeURIComponent(session.id)}/shares`,
+          `api/sessions/${encodeURIComponent(session.id)}/shares`,
         )
       ).shares;
     } catch {
@@ -306,7 +307,7 @@ export class SharingPanel {
         person.keyboard ||= r.keyboard;
         person.inGreenGlow ||= r.inGreenGlow;
         person.paths.push(
-          `/api/sessions/${encodeURIComponent(session.id)}/shares/${share.id}/recipients/${r.id}`,
+          `api/sessions/${encodeURIComponent(session.id)}/shares/${share.id}/recipients/${r.id}`,
         );
         byUpn.set(key, person);
       }
@@ -335,8 +336,8 @@ export class SharingPanel {
     const where = person.watching
       ? 'Watching now'
       : person.inGreenGlow
-        ? 'In GreenGlow, not watching'
-        : 'Not in GreenGlow';
+        ? `In ${brandShortName()}, not watching`
+        : `Not in ${brandShortName()}`;
     const role = person.owner ? 'Owner' : person.access === 'full' ? 'Full Access' : 'View-Only';
     const key = h(
       'span',
@@ -369,8 +370,8 @@ export class SharingPanel {
     const where = person.watching
       ? 'Watching now'
       : person.inGreenGlow
-        ? 'In GreenGlow, not watching'
-        : 'Not in GreenGlow';
+        ? `In ${brandShortName()}, not watching`
+        : `Not in ${brandShortName()}`;
     const access = person.access === 'full' ? 'Full Access' : 'View-Only';
     const toggle = h(
       'button',
@@ -471,7 +472,7 @@ export class SharingPanel {
 
   async #forget(session: SessionInfo): Promise<void> {
     try {
-      await api('DELETE', `/api/sessions/${encodeURIComponent(session.id)}/shares/me`);
+      await api('DELETE', `api/sessions/${encodeURIComponent(session.id)}/shares/me`);
       this.#status.textContent = `${session.owner}’s session is off your list.`;
     } catch (error) {
       this.#status.textContent = (error as Error).message;

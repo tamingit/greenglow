@@ -275,7 +275,7 @@ public static class PasswordLogin
     private static async Task<IResult> SignedInAsync(HttpContext context, ClaimsIdentity identity, string? returnUrl)
     {
         await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
-        return Results.Json(new { redirect = AuthSetup.SafeReturn(returnUrl) });
+        return Results.Json(new { redirect = AuthSetup.SafeReturn(returnUrl, context) });
     }
 
     internal static IResult Refused(int status, string error, string message) => Results.Json(new { error, message }, statusCode: status);

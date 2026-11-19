@@ -273,7 +273,7 @@ export class FilesPanel {
   }
 
   #path(rest = ''): string {
-    return `/api/files/${encodeURIComponent(this.#current?.name ?? '')}${rest}`;
+    return `api/files/${encodeURIComponent(this.#current?.name ?? '')}${rest}`;
   }
 
   #signOnForm(state: FilesState, user: string): void {

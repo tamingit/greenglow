@@ -27,6 +27,9 @@ const FAKE_PRINT_PORT = 2324;
 const BASE = `http://localhost:${PORT}`;
 /** The demo-mode server (Demo__Enabled), for e2e/tests/demo.spec.ts. */
 const DEMO_BASE = 'http://localhost:5098';
+/** A server under a base path (Server__PublicUrl with a path), for e2e/tests/basepath.spec.ts. */
+const PATH_ORIGIN = 'http://localhost:5099';
+const PATH_BASE = `${PATH_ORIGIN}/greenglow`;
 const children: ChildProcess[] = [];
 const dataDir = mkdtempSync(path.join(tmpdir(), 'greenglow-e2e-'));
 
@@ -194,8 +197,28 @@ try {
       Cluster__NodeId: '6',
     },
   );
+  // A third, under a base path, as behind a proxy that serves it at /greenglow/.
+  start(
+    'basepath',
+    'dotnet',
+    ['run', '--no-build', '--no-launch-profile', '--project', 'server/src/GreenGlow.Server'],
+    {
+      ...process.env,
+      ASPNETCORE_ENVIRONMENT: 'Testing',
+      ASPNETCORE_URLS: PATH_ORIGIN,
+      Auth__DevLogin: 'true',
+      Data__DbPath: path.join(dataDir, 'basepath.db'),
+      Server__PublicUrl: PATH_BASE,
+      Server__StaticDir: path.join(repoRoot, 'packages', 'web', 'dist'),
+      Printer__Port: String(FAKE_PRINT_PORT),
+      Seed__ConnectionsJson: JSON.stringify({ connections: connections.slice(0, 1) }),
+      Entra__InitialAdminUpn: 'admin@example.com',
+      Cluster__NodeId: '4',
+    },
+  );
   await waitFor(`${BASE}/healthz`, 60);
   await waitFor(`${DEMO_BASE}/healthz`, 60);
+  await waitFor(`${PATH_BASE}/healthz`, 60);
 
   // --screenshots takes the help page's screenshots (e2e/screenshots.config.ts) instead.
   const screenshots = process.argv.includes('--screenshots');

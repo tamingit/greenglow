@@ -10,6 +10,7 @@ import {
   type ScreenSnapshot,
   type WireSnapshot,
 } from './protocol/index.ts';
+import { socketUrl } from './urls.ts';
 
 export const TERMINAL_TYPE = 'IBM-3477-FC';
 
@@ -99,7 +100,7 @@ export interface Session {
 
 /** Opens a new session on a named target. `spare` asks for a spare device name. */
 export async function openSession(target: string, spare = false): Promise<SessionInfo> {
-  const response = await fetch('/api/sessions', {
+  const response = await fetch('api/sessions', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ target, spare }),
@@ -130,11 +131,8 @@ export class RemoteSession implements Session {
   constructor(id: string, listener: SessionListener, share?: string | null, takeOver = false) {
     this.id = id;
     this.#listener = listener;
-    const scheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const query = share ? `?share=${encodeURIComponent(share)}` : takeOver ? '?takeover=1' : '';
-    this.#socket = new WebSocket(
-      `${scheme}//${location.host}/ws/session/${encodeURIComponent(id)}${query}`,
-    );
+    this.#socket = new WebSocket(socketUrl(`ws/session/${encodeURIComponent(id)}${query}`));
     this.#socket.addEventListener('message', (event: MessageEvent<string>) =>
       this.#message(event.data),
     );

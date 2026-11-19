@@ -164,7 +164,7 @@ public sealed partial class SignInSetup(
             if (initial && publicUrl is null && !fromEnvironment)
                 return Field("publicUrl", "Enter the address people open GreenGlow at, such as http://localhost:8080 or https://greenglow.example.com.");
             if (choice.PublicUrl is not null && publicUrl is null)
-                return Field("publicUrl", "The address is an origin such as http://localhost:8080 or https://greenglow.example.com, with no path.");
+                return Field("publicUrl", "The address is like http://localhost:8080 or https://greenglow.example.com, with a path only when the app is under one, such as https://example.com/greenglow.");
 
             await using var db = await dbs.CreateDbContextAsync(cancel);
             var now = clock.GetUtcNow();
@@ -445,7 +445,7 @@ public static class SetupEndpoints
             await PasswordLogin.LogAsync(context, services, admin.Upn, admin.Id, "", $"first-run setup: {choice.Method?.Trim().ToLowerInvariant()}");
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(await users.SignInKnownAsync(admin.Id)));
-            return Results.Json(new { redirect = "/admin.html", warning = outcome.Warning });
+            return Results.Json(new { redirect = Web.PublicAddress.Here(context, "/admin.html"), warning = outcome.Warning });
         }).RequireRateLimiting(RateLimiting.Password);
     }
 

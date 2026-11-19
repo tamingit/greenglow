@@ -19,7 +19,8 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
   - administrators;
   - connections, and who may use each one;
   - the connection log;
-  - the session limits.
+  - the session limits;
+  - branding: the name, short name, brand colour and icon, and the public address (see below).
 
   A connection with no access grants is for administrators only. The group Everyone is built in (`People/Everyone.cs`): every signed-in user, whatever the sign-in method, and whether or not the directory answers.
 - **Sessions and sharing.**
@@ -34,7 +35,8 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
   - It is named after its screen's title, and coloured for its system.
   - A lock shows the link: green for verified TLS, yellow for TLS without a check, red for plain Telnet.
   - Up to 10 tabs. Alt+1 to Alt+0 switch, Alt+N or + opens a new one, and Alt+J joins a session just shared with the user.
-  - The top bar holds only the logo, the tabs, who has the keyboard, the status, Full screen and the menu.
+  - **Tiles** (`tiles.ts`). The Tile button (Alt+T) shows the tabs side by side, up to 3 wide and 2 tall; the menu's Tile layout picks Auto or a grid. The active tab's tile holds the one terminal (`#stage` moves into it); the others are pictures painted by their own renderers, and a click makes one active. With more tabs than tiles, the most recently used show.
+  - The top bar holds only the logo, the tabs, who has the keyboard, the status, Tile, Full screen and the menu.
 - **Data.** SQLite through EF Core holds:
   - settings and users;
   - connections, with grants and colours;
@@ -62,6 +64,11 @@ GreenGlow Connect ("GreenGlow" for short) is a browser TN5250 client for IBM i. 
   - The user signs on to the IBM i's Network Print server with their own IBM i user and password.
   - They see their own spooled files and open one as a PDF. The server renders SCS, passes PDFs through and refuses AFP.
 - **Files.** The Files panel browses the IFS's folders, downloads files, uploads files and folders, and makes, renames and deletes them (`files.ts`, `server/src/GreenGlow.Server/Files/`), through the IBM i's file server (`HostServers/FileServer.cs`; the port mapper first, 8473/9473 as the fallback). The user signs on with a saved login or their own IBM i user and password, as in the Printer panel. Uploads make missing folders, refuse a file that is there unless asked to replace it, and tag new files `Files__UploadCcsid` (1208); `Files__MaxUploadMegabytes` (2048) caps a file. Delete asks first, and again for a folder with things in it (deleted entry by entry: the IBM i deletes only empty folders). The server never renames or deletes `/` or a folder directly in it (`FileEndpoints.Protected`).
+- **Branding.** An administrator can rename and recolour the app and give it its own icon (`Branding/`, `src/admin/branding.ts`). The values are settings (`Brand.*`), so they sync like the others; with none set, pages are served exactly as built.
+  - The server serves each page and the manifest with the brand in place (`BrandPages`): the full name `GreenGlow Connect`, the short name in `content="GreenGlow"` meta tags, and the theme colour `#1d4d2c` are the three strings it replaces, so keep them literal in the HTML. `vite.config.ts` does the same in development.
+  - The colour comes as `/branding/brand.css` (the CSP allows no inline style); `BrandColors` works out the bar's and accents' shades from it and keeps text readable. Looks and terminal colours are untouched.
+  - A custom icon is drawn by the admin page into the built icons' names and sizes and served from `/branding/`; the server only checks they are PNGs of the right size.
+  - Page scripts take the name from the meta tags (`src/brand.ts`), never a literal "GreenGlow". The look named GreenGlow keeps its name.
 - **Help.** The help page (`help.html`) holds the user guide. Only administrators can open the administrator guide (`/api/admin/guide`, from `server/src/GreenGlow.Server/Help/`). `npm run screenshots` takes the screenshots against the fake IBM i.
 - **Public demo.** Demo mode (`Demo__Enabled`) lets anyone sign in as a guest and use only demo systems: the fake IBM i, and PUB400 once it is enabled. See [Demo mode](#demo-mode).
 
@@ -114,6 +121,7 @@ browser (web) ⇄ HTTPS + WebSocket /ws/session/<id> (JSON) ⇄ server (engine, 
     - `AgentCheck` answers HAProxy.
     - **Never delete synced rows in bulk (`ExecuteDelete`).** Delete them through the change tracker, children included, so each delete is journalled.
   - `Macros/`, `Printing/`, `Help/`: macros, printer output and the administrator guide.
+  - `Branding/`: the brand (`BrandStore`), its colours (`BrandColors`) and the branded pages and `/branding/` files (`BrandPages`).
   - `Data/`: EF Core with SQLite (`GreenGlowDb`) and migrations (`Data/Migrations`), run at startup.
   - `Configuration/`: options, the connection seed (`ConnectionSeed`, authoritative in demo mode), and `.env` reading in Development.
   - `Relay/`: `HostConnector` (TCP or verified TLS to the host) and `TargetCatalog`.
@@ -181,7 +189,7 @@ Settings use ASP.NET Core names (`Section__Key`) from the environment, and in De
 
 | Setting | Purpose |
 |---|---|
-| `Server__PublicUrl` | The external URL. Its origin may open sessions, and share links are built on it. When it is `https://`, every request is treated as arriving there, so the Entra ID redirect is `https://` behind a TLS proxy |
+| `Server__PublicUrl` | The external URL. Its origin may open sessions, and share links are built on it. When it is `https://`, every request is treated as arriving there, so the Entra ID redirect is `https://` behind a TLS proxy. An address saved at setup or on the admin page (Branding) wins over it; its origin stays allowed |
 | `Server__AllowedOrigins__0` | More allowed origins. The dev profile adds the Vite server |
 | `Server__TrustForwardedHeaders` | Behind the TLS proxy, take the client address and scheme from `X-Forwarded-*` |
 | `Server__StaticDir` | The built web app |

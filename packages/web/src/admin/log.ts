@@ -128,7 +128,7 @@ export function logPanel(): { element: HTMLElement; load(): Promise<void> } {
     try {
       const page = await api<{ rows: Row[]; next: string | null }>(
         'GET',
-        `/api/admin/log?${params(older)}`,
+        `api/admin/log?${params(older)}`,
       );
       rows = older ? [...rows, ...page.rows] : page.rows;
       next = page.next;

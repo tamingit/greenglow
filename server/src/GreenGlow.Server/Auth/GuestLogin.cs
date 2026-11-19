@@ -27,7 +27,7 @@ public static class GuestLogin
             var identity = await users.SignInGuestAsync();
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity),
                 new AuthenticationProperties { IsPersistent = true });
-            return Results.Redirect(AuthSetup.SafeReturn(form?["returnUrl"]));
+            return Results.Redirect(AuthSetup.SafeReturn(form?["returnUrl"], context));
         }).RequireRateLimiting(RateLimiting.Guest);
     }
 }

@@ -97,9 +97,10 @@ public sealed class SignInMethodTests
 
     [Theory]
     [InlineData("greenglow.example")]
-    [InlineData("http://host/path")]
+    [InlineData("http://host/api")]
+    [InlineData("http://host/path?x=1")]
     [InlineData("ftp://host")]
-    public async Task SetupNeedsTheAddressAsAnOrigin(string address)
+    public async Task SetupNeedsAValidAddress(string address)
     {
         using var factory = Factory();
         var refused = await Client(factory).PostAsJsonAsync("/auth/setup", LocalSetup(address), T.Token());

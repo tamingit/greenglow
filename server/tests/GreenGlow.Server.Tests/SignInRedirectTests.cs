@@ -79,4 +79,15 @@ public sealed class SignInRedirectTests
         var health = await factory.CreateClient().GetAsync("/healthz");
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
     }
+
+    [Fact]
+    public async Task AnAddressSavedOnTheAdminPageWinsOverTheConfiguredOne()
+    {
+        using var factory = Factory("https://greenglow.example.com");
+        await factory.Services.GetRequiredService<GreenGlow.Server.Data.SettingsStore>().SetTextAsync(
+            new Dictionary<string, string?> { [GreenGlow.Server.Web.PublicAddress.Setting] = "https://terminal.example.com" });
+
+        var response = await SignInAsync(factory, "127.0.0.1:5090");
+        Assert.Equal("https://terminal.example.com/auth/callback", RedirectUri(response));
+    }
 }

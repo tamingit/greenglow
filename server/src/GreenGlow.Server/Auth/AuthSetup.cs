@@ -181,17 +181,17 @@ public static class AuthSetup
     public static void MapAuthEndpoints(this WebApplication app, SignInEnvironment environment)
     {
         // Signing in: back to the page that asked, which must be on this site.
-        app.MapGet("/auth/signin", (string? returnUrl, SignInConfig config) =>
+        app.MapGet("/auth/signin", (string? returnUrl, HttpContext context, SignInConfig config) =>
         {
-            var target = SafeReturn(returnUrl);
+            var target = SafeReturn(returnUrl, context);
             return config.Mode switch
             {
-                SignInMode.Setup => Results.Redirect(SetupPage),
-                SignInMode.Dev => Results.Redirect($"/auth/dev?returnUrl={Uri.EscapeDataString(target)}"),
-                SignInMode.Guest => Results.Redirect($"{GuestLogin.Path}?returnUrl={Uri.EscapeDataString(target)}"),
+                SignInMode.Setup => Results.Redirect(Here(context, SetupPage)),
+                SignInMode.Dev => Results.Redirect(Here(context, $"/auth/dev?returnUrl={Uri.EscapeDataString(target)}")),
+                SignInMode.Guest => Results.Redirect(Here(context, $"{GuestLogin.Path}?returnUrl={Uri.EscapeDataString(target)}")),
                 SignInMode.Entra => Results.Challenge(new AuthenticationProperties { RedirectUri = target },
                     [OpenIdConnectDefaults.AuthenticationScheme]),
-                _ => Results.Redirect($"{SignInPage}?returnUrl={Uri.EscapeDataString(target)}"),
+                _ => Results.Redirect(Here(context, $"{SignInPage}?returnUrl={Uri.EscapeDataString(target)}")),
             };
         });
 
@@ -206,10 +206,10 @@ public static class AuthSetup
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return config.Mode switch
             {
-                SignInMode.Guest => Results.Redirect(GuestLogin.Path),
-                SignInMode.Entra when entra => Results.SignOut(new AuthenticationProperties { RedirectUri = "/" },
+                SignInMode.Guest => Results.Redirect(Here(context, GuestLogin.Path)),
+                SignInMode.Entra when entra => Results.SignOut(new AuthenticationProperties { RedirectUri = Here(context, "/") },
                     [OpenIdConnectDefaults.AuthenticationScheme]),
-                _ => Results.Redirect("/"),
+                _ => Results.Redirect(Here(context, "/")),
             };
         }).RequireAuthorization();
 
@@ -222,7 +222,8 @@ public static class AuthSetup
         if (environment.Mode == SignInMode.Dev)
         {
             app.Logger.LogWarning("Auth:DevLogin is on: anyone can sign in as any UPN. Never use this in production.");
-            app.MapGet("/auth/dev", (string? returnUrl) => Results.Content(DevLoginPage(SafeReturn(returnUrl)), "text/html"));
+            app.MapGet("/auth/dev", (string? returnUrl, HttpContext context) =>
+                Results.Content(DevLoginPage(SafeReturn(returnUrl, context), Here(context, "/auth/dev")), "text/html"));
             app.MapPost("/auth/dev", async (HttpContext context, UserStore users) =>
             {
                 var form = await context.Request.ReadFormAsync();
@@ -230,7 +231,7 @@ public static class AuthSetup
                 if (!DevUpn.IsMatch(upn)) return Results.BadRequest("Enter a UPN such as someone@example.com");
                 var identity = await users.SignInAsync(DevObjectId(upn), upn, form["name"].ToString().Trim());
                 await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
-                return Results.Redirect(SafeReturn(form["returnUrl"]));
+                return Results.Redirect(SafeReturn(form["returnUrl"], context));
             });
             return;
         }
@@ -248,11 +249,16 @@ public static class AuthSetup
     public static string DevObjectId(string upn) =>
         new Guid(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(upn.ToLowerInvariant()))).ToString();
 
-    /// <summary>A local path only: never another site, so sign-in can't be used to redirect away.</summary>
-    internal static string SafeReturn(string? returnUrl) =>
+    /// <summary>
+    /// A local path only: never another site, so sign-in can't be used to redirect away. Pages
+    /// send their own path, base path and all; anything else goes to the app's first page.
+    /// </summary>
+    internal static string SafeReturn(string? returnUrl, HttpContext context) =>
         returnUrl is { Length: > 0 } && returnUrl[0] == '/' && !returnUrl.StartsWith("//") && !returnUrl.StartsWith("/\\")
             ? returnUrl
-            : "/";
+            : Here(context, "/");
+
+    private static string Here(HttpContext context, string path) => Web.PublicAddress.Here(context, path);
 
     private static Task Deny(RedirectContext<CookieAuthenticationOptions> context, int status)
     {
@@ -260,13 +266,13 @@ public static class AuthSetup
         return Task.CompletedTask;
     }
 
-    private static string DevLoginPage(string returnUrl) => $$"""
+    private static string DevLoginPage(string returnUrl, string action) => $$"""
         <!doctype html>
         <html lang="en"><head><meta charset="utf-8"><title>GreenGlow Connect dev sign-in</title></head>
         <body>
           <h1>Dev sign-in</h1>
           <p>Development only: Entra ID is not configured.</p>
-          <form method="post" action="/auth/dev">
+          <form method="post" action="{{System.Net.WebUtility.HtmlEncode(action)}}">
             <label>UPN <input name="upn" type="email" required autofocus></label>
             <label>Name <input name="name"></label>
             <input type="hidden" name="returnUrl" value="{{System.Net.WebUtility.HtmlEncode(returnUrl)}}">

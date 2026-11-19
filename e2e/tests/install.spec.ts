@@ -4,6 +4,7 @@ import { signIn } from './helpers.ts';
 interface Manifest {
   name: string;
   start_url: string;
+  scope: string;
   display: string;
   icons: { src: string; sizes: string; purpose?: string }[];
 }
@@ -24,7 +25,7 @@ test.describe('installing as an app', () => {
     };
     expect(read.url).toMatch(/\/manifest\.webmanifest$/);
     expect(read.errors).toEqual([]);
-    const manifest = JSON.parse(read.data ?? '{}') as Manifest & { scope: string };
+    const manifest = JSON.parse(read.data ?? '{}') as Manifest;
     // Chrome's install criteria: a name, 192 and 512 pixel icons, a start URL in scope, and
     // an app window (standalone). No service worker is needed, and none is used.
     expect(manifest.name).toBeTruthy();
@@ -47,9 +48,11 @@ test.describe('installing as an app', () => {
     const href = await page.locator('link[rel=manifest]').count();
     expect(href).toBe(0); // the dev sign-in page is the server's, not the app's
     const manifest = (await (await request.get('/manifest.webmanifest')).json()) as Manifest;
+    // Relative, so an app under a base path starts there (basepath.spec.ts checks that).
     expect(manifest).toMatchObject({
       name: 'GreenGlow Connect',
-      start_url: '/',
+      start_url: './',
+      scope: './',
       display: 'standalone',
     });
     for (const icon of manifest.icons) {
@@ -64,7 +67,7 @@ test.describe('installing as an app', () => {
     await signIn(page, 'admin@example.com', '/admin.html');
     await expect(page.locator('link[rel=manifest]')).toHaveAttribute(
       'href',
-      '/manifest.webmanifest',
+      './manifest.webmanifest',
     );
     // No service worker: nothing is cached for offline use.
     expect(

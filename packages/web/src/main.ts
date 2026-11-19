@@ -29,6 +29,7 @@ import {
 } from './session.ts';
 import { ContextMenu } from './contextmenu.ts';
 import { MAX_TABS, TabStrip, type TabView } from './tabs.ts';
+import { TILE_LAYOUTS, Tiles, type TileLayout } from './tiles.ts';
 import { KeyPanel } from './keypanel.ts';
 import { api } from './admin/api.ts';
 import { MacrosPanel } from './macros.ts';
@@ -47,7 +48,9 @@ import './greenglow.css';
 import './night-shift.css';
 import './offline.css';
 import './tabs.css';
+import './tiles.css';
 import './side.css';
+import { brandShortName } from './brand.ts';
 
 interface TargetInfo {
   name: string;
@@ -63,6 +66,11 @@ interface TargetInfo {
 }
 
 const fullscreenButton = element<HTMLButtonElement>('#fullscreen');
+const tileButton = element<HTMLButtonElement>('#tile');
+const menuTile = element<HTMLButtonElement>('#menu-tile');
+const menuTileLabel = element<HTMLElement>('#menu-tile-label');
+const tileLayoutGroup = element<HTMLElement>('#tile-layout');
+const workspace = element<HTMLElement>('.workspace');
 const lookGroup = element<HTMLElement>('#look');
 const ruleLineGroup = element<HTMLElement>('#rule-line');
 const screenSizeGroup = element<HTMLElement>('#screen-size');
@@ -165,6 +173,13 @@ const strip = new TabStrip(element<HTMLElement>('#tab-strip'), {
   },
   add: () => newSession(),
 });
+const tiles = new Tiles(workspace, stage, look, {
+  select(id) {
+    const tab = tabs.find((t) => t.id === id);
+    if (tab) activate(tab);
+  },
+  add: () => newSession(),
+});
 
 /** How the status dot shows the session: grey, amber, green or red. */
 type StatusState = 'idle' | 'busy' | 'ok' | 'warn' | 'error';
@@ -218,6 +233,8 @@ interface Tab {
   rolled: 'up' | 'down' | undefined;
   /** Called with each new screen while Copy entire table waits for the next page. */
   screenWaiter: ((snapshot: ScreenSnapshot) => void) | undefined;
+  /** When it was last the active tab, so the tiles show those used most recently. */
+  usedAt: number;
 }
 
 let nextTabId = 1;
@@ -245,6 +262,7 @@ function newTab(target: string): Tab {
     inUse: undefined,
     screenWaiter: undefined,
     rolled: undefined,
+    usedAt: 0,
   };
 }
 
@@ -347,7 +365,7 @@ function showColor(target: TargetInfo | undefined): void {
 async function saveColor(color: string | null): Promise<void> {
   const target = targets.get(active.target);
   if (!target) return;
-  const response = await fetch(`/api/targets/${encodeURIComponent(target.name)}/color`, {
+  const response = await fetch(`api/targets/${encodeURIComponent(target.name)}/color`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ color }),
@@ -443,6 +461,20 @@ function tabView(tab: Tab): TabView {
 
 function showTabs(): void {
   strip.show(tabs.map(tabView), active.id);
+  showTiles();
+}
+
+/** The tiles, when on: the tabs used most recently, the active one holding the terminal. */
+function showTiles(): void {
+  tiles.show(
+    tabs.map((tab) => ({
+      ...tabView(tab),
+      connected: tab.connected,
+      screen: tab.session?.screen,
+    })),
+    active.id,
+    [...tabs].sort((a, b) => b.usedAt - a.usedAt).map((tab) => tab.id),
+  );
 }
 
 /**
@@ -522,6 +554,7 @@ function show(tab: Tab, snapshot: ScreenSnapshot, title: string): void {
   }
   if (retitled) showTabs();
   if (tab === active) paint(snapshot);
+  else tiles.paint(tab.id, snapshot);
 }
 
 // Paint at most once a frame, with the latest snapshot.
@@ -699,16 +732,16 @@ function alertEnded(end: Ended): void {
 /** Sends a signed-out visitor to sign in, then back to this page. */
 function signIn(): never {
   location.assign(
-    `/auth/signin?returnUrl=${encodeURIComponent(location.pathname + location.search)}`,
+    `auth/signin?returnUrl=${encodeURIComponent(location.pathname + location.search)}`,
   );
   throw new Error('Signing in');
 }
 
 /** The signed-in user, shown in the menu. */
 async function loadUser(): Promise<void> {
-  const response = await fetch('/api/me');
+  const response = await fetch('api/me');
   if (response.status === 401) signIn();
-  if (!response.ok) throw new Error(`/api/me returned ${response.status}`);
+  if (!response.ok) throw new Error(`api/me returned ${response.status}`);
   const me = (await response.json()) as {
     upn: string;
     name: string;
@@ -736,9 +769,9 @@ async function loadUser(): Promise<void> {
 }
 
 async function loadTargets(): Promise<void> {
-  const response = await fetch('/api/targets');
+  const response = await fetch('api/targets');
   if (response.status === 401) signIn();
-  if (!response.ok) throw new Error(`/api/targets returned ${response.status}`);
+  if (!response.ok) throw new Error(`api/targets returned ${response.status}`);
   const list = (await response.json()) as { targets: TargetInfo[] };
   for (const target of list.targets) {
     targets.set(target.name, target);
@@ -978,8 +1011,8 @@ const invites = new Invites(joinShared);
 
 /** The user's own sessions and those shared with them, as the server holds them now. */
 async function listSessions(): Promise<SessionInfo[]> {
-  const response = await fetch('/api/sessions');
-  if (!response.ok) throw new Error(`/api/sessions returned ${response.status}`);
+  const response = await fetch('api/sessions');
+  if (!response.ok) throw new Error(`api/sessions returned ${response.status}`);
   return ((await response.json()) as { sessions: SessionInfo[] }).sessions;
 }
 
@@ -1012,7 +1045,7 @@ function showLobby(): void {
       takeOver: (info) => join(info, active, true),
       joinAll,
       end: (info) =>
-        void fetch(`/api/sessions/${encodeURIComponent(info.id)}`, { method: 'DELETE' }),
+        void fetch(`api/sessions/${encodeURIComponent(info.id)}`, { method: 'DELETE' }),
     },
   );
 }
@@ -1171,7 +1204,7 @@ async function playById(info: { id: string; name: string }): Promise<void> {
   if (!mayType()) return;
   let macro;
   try {
-    const { content } = await api<{ content: string }>('GET', `/api/macros/${info.id}`);
+    const { content } = await api<{ content: string }>('GET', `api/macros/${info.id}`);
     macro = parseHodMacro(content);
   } catch (error) {
     macros.say((error as Error).message);
@@ -1242,7 +1275,7 @@ async function playById(info: { id: string; name: string }): Promise<void> {
     playing = undefined;
   }
   const skipped = result.skipped.length
-    ? ` It skipped what GreenGlow doesn’t play yet: ${result.skipped.join(', ')}.`
+    ? ` It skipped what ${brandShortName()} doesn’t play yet: ${result.skipped.join(', ')}.`
     : '';
   if (result.done) setStatus(`Played ${info.name}.${skipped}`, 'ok', tab);
   else setStatus(`Stopped ${info.name}: ${result.stopped}.${skipped}`, 'warn', tab);
@@ -1283,7 +1316,7 @@ async function stopRecording(): Promise<void> {
   const { recorder, tab } = recording;
   const macro = recorder.finish(tab.session?.screen);
   try {
-    await api('POST', '/api/macros', { name: recorder.name, content: writeHodMacro(macro) });
+    await api('POST', 'api/macros', { name: recorder.name, content: writeHodMacro(macro) });
     endRecording(`Saved the macro ${recorder.name}: ${macro.screens.length} screens.`);
   } catch (error) {
     // Kept recording, so nothing is lost: another name can be tried by stopping again later.
@@ -1785,7 +1818,7 @@ async function endSession(tab: Tab): Promise<void> {
   const id = tab.session?.id;
   tab.session?.close();
   if (id === undefined) return;
-  const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const response = await fetch(`api/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!response.ok && response.status !== 404)
     logLine(`Ending the session failed: ${response.status}`, tab);
 }
@@ -1844,8 +1877,11 @@ async function connectUnlessOpenElsewhere(tab: Tab): Promise<void> {
   if (tabs.includes(tab) && !tab.connected) await connect(tab.target, false, tab);
 }
 
+let useClock = 0;
+
 /** Shows a tab: its screen, its bar and its card. `focus` puts the keys on its screen. */
 function activate(tab: Tab, focus = true): void {
+  tab.usedAt = ++useClock;
   if (tab !== active) {
     active = tab;
     selection.clear();
@@ -1860,7 +1896,8 @@ function activate(tab: Tab, focus = true): void {
   showOffline();
 }
 
-// Alt+1 to Alt+9 and Alt+0 go to the first ten tabs; Alt+N opens a new one; Alt+J joins the
+// Alt+1 to Alt+9 and Alt+0 go to the first ten tabs; Alt+N opens a new one; Alt+T tiles the tabs
+// or shows one again; Alt+J joins the
 // newest session offered as shared with the user; Alt+K, Alt+S, Alt+M and Alt+P pull out or
 // push back the Keys, Share, Macros and Printer output panels;
 // Alt+C copies the table on the screen, every page of it, and Alt+Shift+C only this page.
@@ -1895,6 +1932,10 @@ window.addEventListener(
       event.preventDefault();
       event.stopPropagation();
       newSession();
+    } else if (event.code === 'KeyT') {
+      event.preventDefault();
+      event.stopPropagation();
+      setTiled(!tiles.on);
     } else if (event.code === 'KeyJ' && invites.joinNewest()) {
       event.preventDefault();
       event.stopPropagation();
@@ -1943,13 +1984,19 @@ for (const option of LOOKS) {
 showLook(look);
 /** The look showing now, with the user's own colours for it (themes.ts). */
 let currentLook = look;
-applyTheme(terminal, loadTheme(storage(), look.id));
+/** The user's colours, on the terminal and on the other tiles' screens. */
+function showTheme(theme: ReturnType<typeof loadTheme>): void {
+  applyTheme(terminal, theme);
+  tiles.setTheme(theme);
+}
+showTheme(loadTheme(storage(), look.id));
 function chooseLook(chosen: Look): void {
   currentLook = chosen;
   renderer.setLook(chosen);
+  tiles.setLook(chosen);
   saveLook(storage(), chosen);
   showLook(chosen);
-  applyTheme(terminal, loadTheme(storage(), chosen.id));
+  showTheme(loadTheme(storage(), chosen.id));
 }
 lookGroup.addEventListener('change', (event) => {
   const chosen = lookById((event.target as HTMLInputElement).value);
@@ -1967,7 +2014,7 @@ function customizeColours(): void {
       changed: (theme) => {
         const id = theme?.base ?? shown.id;
         saveTheme(storage(), id, theme);
-        if (id === currentLook.id) applyTheme(terminal, theme);
+        if (id === currentLook.id) showTheme(theme);
       },
       switchLook: (id) => {
         const next = lookById(id);
@@ -2063,7 +2110,10 @@ for (const size of FONT_SIZES) {
 }
 function applyScreenSize(): void {
   fontSizeRow.hidden = screenMode !== 'fixed';
-  renderer.setSize(screenMode === 'fixed' ? { mode: 'fixed', fontSize } : { mode: screenMode });
+  const size: ScreenSize =
+    screenMode === 'fixed' ? { mode: 'fixed', fontSize } : { mode: screenMode };
+  renderer.setSize(size);
+  tiles.setSize(size);
 }
 applyScreenSize();
 screenSizeGroup.addEventListener('change', (event) => {
@@ -2088,7 +2138,8 @@ fontSizeSelect.addEventListener('change', () => {
 });
 async function fullScreen(): Promise<void> {
   menu.open = false;
-  await terminal.requestFullscreen();
+  // Tiled, every tile goes full screen; else the terminal alone.
+  await (tiles.on ? workspace : terminal).requestFullscreen();
   // In full screen, Chromium can hand keys such as Ctrl+W and F11 to the page.
   const keyboard = (navigator as Navigator & { keyboard?: { lock?: () => Promise<void> } })
     .keyboard;
@@ -2096,6 +2147,67 @@ async function fullScreen(): Promise<void> {
   focusScreen();
 }
 fullscreenButton.addEventListener('click', () => void fullScreen());
+
+// Tiles: the tabs side by side, up to 3 wide and 2 tall (tiles.ts). On or off, and the layout,
+// kept per browser.
+const TILES_KEY = 'greenglow.tiles';
+const TILE_LAYOUT_KEY = 'greenglow.tile-layout';
+
+/** Tiles on or off: the Tile button, Alt+T and the menu. */
+function setTiled(on: boolean, save = true): void {
+  menu.open = false;
+  // Moving the terminal between tiles would leave full screen; leave it cleanly first.
+  if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+  tiles.on = on;
+  tileButton.setAttribute('aria-pressed', String(on));
+  tileButton.title = on ? 'Show one session (Alt+T)' : 'Tile the sessions (Alt+T)';
+  menuTile.setAttribute('aria-pressed', String(on));
+  menuTileLabel.textContent = on ? 'Show one session' : 'Tile the sessions';
+  if (save)
+    try {
+      storage()?.setItem(TILES_KEY, on ? 'on' : 'off');
+    } catch {
+      // Storage blocked or full: the choice still applies to this page.
+    }
+  focusScreen();
+}
+for (const option of TILE_LAYOUTS) {
+  const input = document.createElement('input');
+  input.type = 'radio';
+  input.name = 'tile-layout';
+  input.id = `tile-layout-${option.id}`;
+  input.value = option.id;
+  const label = document.createElement('label');
+  label.htmlFor = input.id;
+  label.textContent = option.name;
+  label.title = option.title;
+  tileLayoutGroup.append(input, label);
+}
+function chooseTileLayout(layout: TileLayout): void {
+  tiles.layout = layout;
+  for (const input of tileLayoutGroup.querySelectorAll('input'))
+    input.checked = input.value === layout;
+}
+try {
+  const saved = storage()?.getItem(TILE_LAYOUT_KEY);
+  chooseTileLayout(TILE_LAYOUTS.find((t) => t.id === saved)?.id ?? 'auto');
+} catch {
+  chooseTileLayout('auto');
+}
+// Choosing a layout tiles the sessions, if they weren't.
+tileLayoutGroup.addEventListener('change', (event) => {
+  const chosen = TILE_LAYOUTS.find((t) => t.id === (event.target as HTMLInputElement).value);
+  if (!chosen) return;
+  chooseTileLayout(chosen.id);
+  try {
+    storage()?.setItem(TILE_LAYOUT_KEY, chosen.id);
+  } catch {
+    // Storage blocked or full: the choice still applies to this page.
+  }
+  if (!tiles.on) setTiled(true);
+});
+tileButton.addEventListener('click', () => setTiled(!tiles.on));
+menuTile.addEventListener('click', () => setTiled(!tiles.on));
 let logSaved: string | null = null;
 try {
   logSaved = storage()?.getItem(LOG_KEY) ?? null;
@@ -2143,6 +2255,11 @@ window.addEventListener('beforeunload', (event) => {
 
 active = newTab('');
 tabs.push(active);
+try {
+  if (storage()?.getItem(TILES_KEY) === 'on') setTiled(true, false);
+} catch {
+  // Storage blocked: one session at a time.
+}
 paintBar();
 showTabs();
 showScreen();
@@ -2153,7 +2270,7 @@ async function openShareLink(): Promise<void> {
   const token = new URLSearchParams(location.search).get('share');
   if (!token || demo) return;
   history.replaceState(null, '', location.pathname);
-  const response = await fetch(`/api/shares/${encodeURIComponent(token)}`);
+  const response = await fetch(`api/shares/${encodeURIComponent(token)}`);
   if (!response.ok) {
     const { message } = (await response.json().catch(() => ({}))) as { message?: string };
     setStatus(message ?? 'This share link can’t be opened.', 'warn');

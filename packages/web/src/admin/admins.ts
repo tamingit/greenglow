@@ -35,7 +35,7 @@ export function adminsPanel(me: { id: string }): { element: HTMLElement; load():
   );
 
   async function load(): Promise<void> {
-    const { admins } = await api<{ admins: Admin[] }>('GET', '/api/admin/admins');
+    const { admins } = await api<{ admins: Admin[] }>('GET', 'api/admin/admins');
     body.replaceChildren(
       ...admins.map((admin) =>
         h(
@@ -65,7 +65,7 @@ export function adminsPanel(me: { id: string }): { element: HTMLElement; load():
 
   async function add(entry: DirectoryEntry): Promise<void> {
     try {
-      await api('POST', '/api/admin/admins', { upn: entry.upn ?? entry.name });
+      await api('POST', 'api/admin/admins', { upn: entry.upn ?? entry.name });
       notify(`${entry.upn ?? entry.name} is now an administrator.`);
       await load();
     } catch (error) {
@@ -84,9 +84,9 @@ export function adminsPanel(me: { id: string }): { element: HTMLElement; load():
     )
       return;
     try {
-      await api('DELETE', `/api/admin/admins/${encodeURIComponent(admin.id)}`);
+      await api('DELETE', `api/admin/admins/${encodeURIComponent(admin.id)}`);
       if (self) {
-        location.assign('/');
+        location.assign('./');
         return;
       }
       notify(`${admin.upn} is no longer an administrator.`);
@@ -110,7 +110,7 @@ export function adminsPanel(me: { id: string }): { element: HTMLElement; load():
         (
           await api<{ users: DirectoryEntry[] }>(
             'GET',
-            `/api/directory/users?q=${encodeURIComponent(q)}`,
+            `api/directory/users?q=${encodeURIComponent(q)}`,
           )
         ).users,
       pick: (entry) => void add(entry),

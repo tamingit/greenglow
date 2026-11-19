@@ -68,6 +68,9 @@ public sealed class SessionManager(
 
     public HostSession? Find(Guid id) => _sessions.TryGetValue(id, out var session) && !session.Ended ? session : null;
 
+    /// <summary>Whether a session is still here, ended or not: an ended one is gone once it has finished ending (its name kept). For tests.</summary>
+    internal bool Holds(Guid id) => _sessions.ContainsKey(id);
+
     /// <summary>The live sessions a user opened.</summary>
     public IReadOnlyList<HostSession> OwnedBy(string userId) =>
         All.Where(s => s.Owner.Id == userId).OrderBy(s => s.CreatedAt).ToList();

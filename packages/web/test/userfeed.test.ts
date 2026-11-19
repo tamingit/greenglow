@@ -23,7 +23,12 @@ describe('the user feed', () => {
     vi.useFakeTimers();
     FakeSocket.made = [];
     vi.stubGlobal('WebSocket', FakeSocket);
-    vi.stubGlobal('location', { protocol: 'https:', host: 'greenglow.example.com' });
+    // Under a base path: the socket's address keeps it.
+    vi.stubGlobal('location', {
+      protocol: 'https:',
+      host: 'example.com',
+      href: 'https://example.com/greenglow/?share=abc',
+    });
   });
   afterEach(() => {
     vi.useRealTimers();
@@ -34,7 +39,7 @@ describe('the user feed', () => {
     const lists: unknown[] = [];
     const feed = new UserFeed((sessions) => lists.push(sessions));
     feed.start();
-    expect(FakeSocket.made.map((s) => s.url)).toEqual(['wss://greenglow.example.com/ws/user']);
+    expect(FakeSocket.made.map((s) => s.url)).toEqual(['wss://example.com/greenglow/ws/user']);
     FakeSocket.made[0].push({ type: 'sessions', sessions: [] });
     expect(lists).toEqual([[]]);
 

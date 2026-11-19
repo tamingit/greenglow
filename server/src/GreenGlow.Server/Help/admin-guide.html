@@ -15,7 +15,7 @@
     <strong>Connections</strong> tab lists them as cards, with a card at the end to add one.
   </p>
   <figure>
-    <img src="/api/admin/guide/images/admin-connections.png" alt="The Connections tab" />
+    <img src="api/admin/guide/images/admin-connections.png" alt="The Connections tab" />
     <figcaption>The Connections tab.</figcaption>
   </figure>
   <table>
@@ -136,7 +136,7 @@
     system, and when. It holds metadata only: never what was on a screen or typed.
   </p>
   <figure>
-    <img src="/api/admin/guide/images/admin-log.png" alt="The Connection log tab" />
+    <img src="api/admin/guide/images/admin-log.png" alt="The Connection log tab" />
     <figcaption>The Connection log tab.</figcaption>
   </figure>
   <ul>
@@ -209,7 +209,7 @@
 <section id="admin-admins">
   <h2>Administrators</h2>
   <figure>
-    <img src="/api/admin/guide/images/admin-admins.png" alt="The Administrators tab" />
+    <img src="api/admin/guide/images/admin-admins.png" alt="The Administrators tab" />
     <figcaption>The Administrators tab.</figcaption>
   </figure>
   <p>
@@ -239,7 +239,7 @@
     <strong>Use the default</strong> goes back.
   </p>
   <figure>
-    <img src="/api/admin/guide/images/admin-settings.png" alt="The Settings tab" />
+    <img src="api/admin/guide/images/admin-settings.png" alt="The Settings tab" />
     <figcaption>The Settings tab.</figcaption>
   </figure>
   <table>
@@ -277,6 +277,43 @@
       </tr>
     </tbody>
   </table>
+</section>
+
+<section id="admin-branding">
+  <h2>Branding</h2>
+  <p>
+    How GreenGlow presents itself to everyone: on every page, the sign-in page included, and as an
+    installed app. Each part has a button to go back to GreenGlow's own. A change shows on this page
+    at once, and on other pages when they next load.
+  </p>
+  <ul>
+    <li>
+      <strong>Name</strong>: shown in the top bar and the browser tab. The
+      <strong>short name</strong> is the installed app's name under its icon, and what messages call
+      it. The help pages keep their own wording.
+    </li>
+    <li>
+      <strong>Brand colour</strong>: the top bar, the browser's and installed app's title bar, and
+      buttons and links. The shades for menus, Night Shift and dark mode are worked out from it, and
+      the bar's text turns dark on a light colour so it stays readable. Screens keep their own
+      colours.
+    </li>
+    <li>
+      <strong>Icon</strong>: the top bar, the browser tab and the installed app. Pick a square PNG
+      or SVG, best with a transparent background and at least 512 pixels across. This page draws
+      every size the browser and phones need from it. Where a platform wants no transparency, the
+      brand colour goes behind it. An app already installed may keep its old icon until it is
+      reinstalled.
+    </li>
+    <li>
+      <strong>Address</strong>: the address people open GreenGlow at, such as
+      <code>https://greenglow.example.com</code>. Share links point to it, and only browsers at it,
+      or at an address in the server's configuration, may open sessions. With <code>https://</code>,
+      every request is treated as arriving there, as behind a TLS proxy, so Entra ID sends people
+      back to it after sign-in. Make sure it reaches this server before saving: the page asks first.
+      <strong>Use the configured address</strong> goes back to <code>Server__PublicUrl</code>.
+    </li>
+  </ul>
 </section>
 
 <section id="admin-notes">

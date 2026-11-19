@@ -6,6 +6,8 @@
 import { ApiError, api } from './admin/api.ts';
 import { button, h } from './admin/dom.ts';
 import './printer.css';
+import { brandShortName } from './brand.ts';
+import { appUrl } from './urls.ts';
 
 /** A spooled file as /api/printer/{connection}/files lists it. */
 export interface SpooledFileInfo {
@@ -158,7 +160,7 @@ export class PrinterPanel {
     try {
       const state = await api<PrinterState>(
         'GET',
-        `/api/printer/${encodeURIComponent(system.name)}`,
+        `api/printer/${encodeURIComponent(system.name)}`,
       );
       if (generation !== this.#generation) return;
       const view = printerView(system, state.signedOn ? state.ibmUser : null);
@@ -196,7 +198,7 @@ export class PrinterPanel {
   }
 
   #path(rest = ''): string {
-    return `/api/printer/${encodeURIComponent(this.#current?.name ?? '')}${rest}`;
+    return `api/printer/${encodeURIComponent(this.#current?.name ?? '')}${rest}`;
   }
 
   #signOnForm(user: string, message = '', error = message !== ''): void {
@@ -351,7 +353,7 @@ export class PrinterPanel {
     const tab = window.open('', '_blank');
     if (!tab) {
       this.#say(
-        'The browser blocked the new tab. Allow pop-ups for GreenGlow, then try again.',
+        `The browser blocked the new tab. Allow pop-ups for ${brandShortName()}, then try again.`,
         true,
       );
       return;
@@ -371,7 +373,8 @@ export class PrinterPanel {
             );
           return;
         }
-        tab.location.href = this.#path(`/files/${encodeURIComponent(file.id)}`);
+        // The new tab is blank: give it the whole address, base path and all.
+        tab.location.href = appUrl(this.#path(`/files/${encodeURIComponent(file.id)}`));
         if (generation === this.#generation) this.#say(`Opened ${file.name} in a new tab.`);
       })
       .catch((error: unknown) => {
